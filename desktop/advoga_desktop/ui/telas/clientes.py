@@ -301,6 +301,7 @@ class FichaCliente(QDialog):
         cab.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.painel_processos = None
         self.painel_docs = None
+        self.painel_contratos = None
         permissoes = api.usuario.permissoes if api.usuario else []
         if Permissao.PROCESSOS in permissoes:
             from .processos import PainelProcessos
@@ -310,6 +311,11 @@ class FichaCliente(QDialog):
             from .documentos import PainelDocumentos
             self.painel_docs = PainelDocumentos(api, cliente=(cliente_id, ""))
             self.abas.addTab(self.painel_docs, "Documentos")
+        if Permissao.CONTRATOS in permissoes or Permissao.FINANCEIRO in permissoes:
+            from .financeiro import PainelContratos
+            self.painel_contratos = PainelContratos(api, cliente=(cliente_id, ""))
+            self.abas.addTab(self.painel_contratos, "Contratos e financeiro"
+                             if Permissao.FINANCEIRO in permissoes else "Contratos")
         self.abas.addTab(self.tabela_hist, "Histórico")
         lay.addWidget(self.abas, 1)
 
@@ -326,13 +332,13 @@ class FichaCliente(QDialog):
         w = self.abas.currentWidget()
         if w is self.tabela_hist:
             self.carregar_historico()
-        elif w is not None and w in (self.painel_processos, self.painel_docs):
+        elif w is not None and w in (self.painel_processos, self.painel_docs, self.painel_contratos):
             w.carregar(1)
 
     def carregar(self) -> None:
         with cursor_espera():
             self.cliente = self.api.obter_cliente(self.cliente_id)
-        for painel in (self.painel_processos, self.painel_docs):
+        for painel in (self.painel_processos, self.painel_docs, self.painel_contratos):
             if painel is not None:
                 painel.cliente = (self.cliente_id, self.cliente.nome_completo)
         self._mostrar(self.cliente)

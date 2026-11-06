@@ -134,7 +134,7 @@ def test_tela_processos_e_aba_na_ficha_do_cliente(qtbot, tema, api, cliente_joao
     ficha = FichaCliente(api, cliente_joao[0])
     qtbot.addWidget(ficha)
     nomes = [ficha.abas.tabText(i) for i in range(ficha.abas.count())]
-    assert nomes == ["Dados pessoais", "Processos", "Documentos", "Histórico"]
+    assert nomes == ["Dados pessoais", "Processos", "Documentos", "Contratos e financeiro", "Histórico"]
     ficha.abas.setCurrentWidget(ficha.painel_processos)
     assert ficha.painel_processos.total == 2 and ficha.painel_processos.tabela.isColumnHidden(1)
 

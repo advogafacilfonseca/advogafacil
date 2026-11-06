@@ -17,6 +17,9 @@ import httpx
 
 from advoga_shared.esquemas import (
     Cliente,
+    Comprovante,
+    Contrato,
+    Despesa,
     Documento,
     ItemAuditoria,
     Movimentacao,
@@ -25,6 +28,10 @@ from advoga_shared.esquemas import (
     OpcaoUsuario,
     PaginaAuditoria,
     PaginaClientes,
+    PaginaContratos,
+    Pagamento,
+    Parcela,
+    ResumoFinanceiro,
     PaginaDocumentos,
     PaginaPesquisa,
     PaginaProcessos,
@@ -349,13 +356,15 @@ class ClienteAPI:
         return Documento.model_validate(self._tratar_resposta(r))
 
     def baixar_documento(self, doc_id: str, destino: Path) -> Path:
+        return self._baixar(f"/api/documentos/{doc_id}/arquivo", Path(destino))
+
+    def _baixar(self, rota: str, destino: Path) -> Path:
         """Baixa o arquivo, confere a impressão SHA-256 e só então grava no destino."""
-        destino = Path(destino)
         destino.parent.mkdir(parents=True, exist_ok=True)
         parcial = destino.with_name(destino.name + ".baixando")
         cab = {"Authorization": f"Bearer {self.token}"}
         try:
-            with self._http.stream("GET", f"/api/documentos/{doc_id}/arquivo", headers=cab,
+            with self._http.stream("GET", rota, headers=cab,
                                    timeout=httpx.Timeout(30.0, read=300.0)) as r:
                 if r.status_code >= 400:
                     r.read()
@@ -389,6 +398,107 @@ class ClienteAPI:
     def restaurar_documento(self, doc_id: str, versao: int) -> Documento:
         return Documento.model_validate(self._requisitar(
             "POST", f"/api/documentos/{doc_id}/restaurar", gravacao=True, params={"versao": versao}))
+
+    # ------------------------------------------------------ contratos e financeiro
+    def listar_contratos(self, cliente_id: str | None = None, situacao: str | None = None,
+                         pagina: int = 1, por_pagina: int = 50) -> PaginaContratos:
+        params = {"cliente_id": cliente_id, "situacao": situacao, "pagina": pagina, "por_pagina": por_pagina}
+        return PaginaContratos.model_validate(self._requisitar(
+            "GET", "/api/contratos", params={k: v for k, v in params.items() if v not in (None, "")}))
+
+    def obter_contrato(self, contrato_id: str) -> Contrato:
+        return Contrato.model_validate(self._requisitar("GET", f"/api/contratos/{contrato_id}"))
+
+    def criar_contrato(self, dados: dict[str, Any]) -> Contrato:
+        return Contrato.model_validate(self._requisitar("POST", "/api/contratos", gravacao=True, json=dados))
+
+    def atualizar_contrato(self, contrato_id: str, dados: dict[str, Any]) -> Contrato:
+        return Contrato.model_validate(
+            self._requisitar("PATCH", f"/api/contratos/{contrato_id}", gravacao=True, json=dados))
+
+    def cancelar_contrato(self, contrato_id: str, motivo: str, versao: int) -> Contrato:
+        return Contrato.model_validate(self._requisitar(
+            "POST", f"/api/contratos/{contrato_id}/cancelar", gravacao=True, json={"motivo": motivo, "versao": versao}))
+
+    def renegociar(self, contrato_id: str, dados: dict[str, Any]) -> Contrato:
+        return Contrato.model_validate(
+            self._requisitar("POST", f"/api/contratos/{contrato_id}/renegociar", gravacao=True, json=dados))
+
+    def historico_contrato(self, contrato_id: str) -> list[ItemAuditoria]:
+        return [ItemAuditoria.model_validate(i)
+                for i in self._requisitar("GET", f"/api/contratos/{contrato_id}/historico")]
+
+    def listar_parcelas(self, filtro: str = "abertas", cliente_id: str | None = None, inicio: str | None = None,
+                        fim: str | None = None, pagina: int = 1, por_pagina: int = 200) -> tuple[list[Parcela], int]:
+        params = {"filtro": filtro, "cliente_id": cliente_id, "inicio": inicio, "fim": fim, "pagina": pagina,
+                  "por_pagina": por_pagina}
+        r = self._requisitar("GET", "/api/financeiro/parcelas",
+                             params={k: v for k, v in params.items() if v not in (None, "")})
+        return [Parcela.model_validate(i) for i in r["itens"]], r["total"]
+
+    def cancelar_parcela(self, parcela_id: str, motivo: str, versao: int) -> Parcela:
+        return Parcela.model_validate(self._requisitar(
+            "POST", f"/api/financeiro/parcelas/{parcela_id}/cancelar", gravacao=True,
+            json={"motivo": motivo, "versao": versao}))
+
+    def listar_pagamentos(self, contrato_id: str | None = None, cliente_id: str | None = None,
+                          inicio: str | None = None, fim: str | None = None, pagina: int = 1,
+                          por_pagina: int = 200) -> tuple[list[Pagamento], int]:
+        params = {"contrato_id": contrato_id, "cliente_id": cliente_id, "inicio": inicio, "fim": fim,
+                  "pagina": pagina, "por_pagina": por_pagina}
+        r = self._requisitar("GET", "/api/financeiro/pagamentos",
+                             params={k: v for k, v in params.items() if v not in (None, "")})
+        return [Pagamento.model_validate(i) for i in r["itens"]], r["total"]
+
+    def registrar_pagamento(self, dados: dict[str, Any]) -> Pagamento:
+        return Pagamento.model_validate(
+            self._requisitar("POST", "/api/financeiro/pagamentos", gravacao=True, json=dados))
+
+    def estornar_pagamento(self, pagamento_id: str, motivo: str) -> Pagamento:
+        return Pagamento.model_validate(self._requisitar(
+            "POST", f"/api/financeiro/pagamentos/{pagamento_id}/estornar", gravacao=True, json={"motivo": motivo}))
+
+    def listar_despesas(self, inicio: str | None = None, fim: str | None = None, categoria: str | None = None,
+                        incluir_canceladas: bool = False, pagina: int = 1,
+                        por_pagina: int = 200) -> tuple[list[Despesa], int]:
+        params: dict[str, Any] = {"inicio": inicio, "fim": fim, "categoria": categoria, "pagina": pagina,
+                                  "por_pagina": por_pagina}
+        if incluir_canceladas:
+            params["incluir_canceladas"] = "true"
+        r = self._requisitar("GET", "/api/financeiro/despesas",
+                             params={k: v for k, v in params.items() if v not in (None, "")})
+        return [Despesa.model_validate(i) for i in r["itens"]], r["total"]
+
+    def criar_despesa(self, dados: dict[str, Any]) -> Despesa:
+        return Despesa.model_validate(self._requisitar("POST", "/api/financeiro/despesas", gravacao=True, json=dados))
+
+    def atualizar_despesa(self, despesa_id: str, dados: dict[str, Any]) -> Despesa:
+        return Despesa.model_validate(
+            self._requisitar("PATCH", f"/api/financeiro/despesas/{despesa_id}", gravacao=True, json=dados))
+
+    def cancelar_despesa(self, despesa_id: str, motivo: str, versao: int) -> Despesa:
+        return Despesa.model_validate(self._requisitar(
+            "POST", f"/api/financeiro/despesas/{despesa_id}/cancelar", gravacao=True,
+            json={"motivo": motivo, "versao": versao}))
+
+    def resumo_financeiro(self, inicio: str, fim: str) -> ResumoFinanceiro:
+        return ResumoFinanceiro.model_validate(
+            self._requisitar("GET", "/api/financeiro/resumo", params={"inicio": inicio, "fim": fim}))
+
+    def enviar_comprovante(self, arquivo: Path) -> Comprovante:
+        arquivo = Path(arquivo)
+        if not arquivo.is_file():
+            raise ErroAPI("Arquivo do comprovante não encontrado neste computador.")
+        tipo = mimetypes.guess_type(arquivo.name)[0] or "application/octet-stream"
+        conteudo = arquivo.read_bytes()
+        if len(conteudo) > 50 * 1024 * 1024:
+            raise ErroAPI("Comprovante grande demais (máximo de 50 MB).")
+        return Comprovante.model_validate(self._requisitar(
+            "POST", "/api/financeiro/comprovantes", gravacao=True, params={"nome": arquivo.name},
+            content=conteudo, headers={"Content-Type": tipo}))
+
+    def baixar_comprovante(self, comprovante_id: str, destino: Path) -> Path:
+        return self._baixar(f"/api/financeiro/comprovantes/{comprovante_id}/arquivo", Path(destino))
 
 
 def _em_partes(arquivo, tamanho: int = 1024 * 256):

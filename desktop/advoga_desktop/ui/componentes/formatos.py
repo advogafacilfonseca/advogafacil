@@ -51,3 +51,33 @@ def tamanho_legivel(n: int) -> str:
             return f"{n} {unidade}" if unidade == "bytes" else f"{n:.1f} {unidade}".replace(".", ",")
         n /= 1024
     return str(n)
+
+
+def dinheiro_br(valor) -> str:
+    """Decimal → 'R$ 1.234,56'."""
+    from decimal import Decimal
+
+    v = Decimal(valor or 0)
+    texto = f"{abs(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{'-' if v < 0 else ''}R$ {texto}"
+
+
+def ler_dinheiro_br(texto: str):
+    """'1.234,56', 'R$ 1234,5' ou '1234.56' → Decimal com 2 casas. Vazio → None."""
+    import re
+    from decimal import Decimal, InvalidOperation
+
+    t = (texto or "").replace("R$", "").replace(" ", "").strip()
+    if not t:
+        return None
+    if "," in t:
+        t = t.replace(".", "").replace(",", ".")
+    elif re.fullmatch(r"\d{1,3}(\.\d{3})+", t):
+        t = t.replace(".", "")
+    try:
+        v = Decimal(t)
+    except InvalidOperation:
+        raise ValueError(f"Valor inválido: {texto}. Use o formato 1.234,56.") from None
+    if v != v.quantize(Decimal("0.01")):
+        raise ValueError(f"Valor inválido: {texto}. Use no máximo 2 casas decimais.")
+    return v.quantize(Decimal("0.01"))
