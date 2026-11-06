@@ -108,6 +108,13 @@ jobs:
           if (-not (Test-Path "$env:ProgramData\AdvogaFacil\config\CODIGO_DE_INSTALACAO.txt")) { throw "Sem código de instalação" }
           if (-not (Test-Path "$env:ProgramData\AdvogaFacil\config\COMO_CONECTAR.txt")) { throw "Sem COMO_CONECTAR.txt" }
           Get-Content "$env:ProgramData\AdvogaFacil\config\COMO_CONECTAR.txt"
+          $eu = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+          foreach ($a in @("CODIGO_DE_INSTALACAO.txt", "COMO_CONECTAR.txt")) {
+            $sids = (Get-Acl "$env:ProgramData\AdvogaFacil\config\$a").Access | ForEach-Object { $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value }
+            if ($sids -notcontains $eu) { throw "Quem instalou não consegue abrir $a pelo atalho" }
+          }
+          $sidsCfg = (Get-Acl "$env:ProgramData\AdvogaFacil\config\servidor.json").Access | ForEach-Object { $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value }
+          if ($sidsCfg -contains $eu) { throw "servidor.json ficou acessível fora dos Administradores" }
           # O PostgreSQL só escuta no próprio computador
           $pg = Get-NetTCPConnection -LocalPort 5433 -State Listen
           if ($pg | Where-Object { $_.LocalAddress -ne "127.0.0.1" }) { throw "PostgreSQL exposto fora de 127.0.0.1" }

@@ -113,4 +113,13 @@ New-NetFirewallRule -DisplayName "Advoga Fácil Servidor (Tailscale)" -Direction
 # Arquivo com os endereços e a impressão digital do certificado (atalho no menu Iniciar).
 & (Join-Path $PastaPrograma "servidor\AdvogaFacilServidor.exe") informacoes | Out-Null
 
+# A pasta de dados só abre como administrador. Os atalhos do menu Iniciar abrem o Bloco de Notas
+# sem elevação, então a pessoa que instalou recebe leitura APENAS destes dois arquivos (o resto da
+# pasta config, com senhas e chaves, continua restrito a Administradores e SYSTEM).
+$Instalador = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+foreach ($arq in @("CODIGO_DE_INSTALACAO.txt", "COMO_CONECTAR.txt")) {
+    $caminho = Join-Path $Config $arq
+    if (Test-Path $caminho) { icacls $caminho /grant "*${Instalador}:(R)" | Out-Null }
+}
+
 Stop-Transcript | Out-Null
