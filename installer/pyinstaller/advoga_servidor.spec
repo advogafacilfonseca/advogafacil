@@ -9,10 +9,12 @@ a = Analysis(
     [str(Path(SPECPATH) / "entrada_servidor.py")],
     pathex=[str(RAIZ / "server"), str(RAIZ / "shared")],
     datas=[(str(SRV / "alembic.ini"), "advoga_server"),
-           (str(SRV / "alembic"), "advoga_server/alembic")],
+           (str(SRV / "alembic"), "advoga_server/alembic"),
+           (str(SRV / "recursos"), "advoga_server/recursos")],
     hiddenimports=["advoga_server.alembic.env", "psycopg", "psycopg_binary",
                    "uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols.http.auto",
-                   "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on", "email_validator"],
+                   "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on", "email_validator",
+                   "reportlab.graphics.barcode.common", "openpyxl"],
     excludes=["tkinter", "PySide6"],
 )
 pyz = PYZ(a.pure)

@@ -1167,3 +1167,106 @@ class ConcluirGoogle(BaseModel):
 
 class TesteEmail(BaseModel):
     para: EmailStr | None = None  # padrão: e-mail da própria Master
+
+
+# ================================================================ painel e relatórios (etapa 8)
+TIPOS_RELATORIO = {
+    "clientes": "Clientes", "processos": "Processos", "audiencias": "Audiências", "prazos": "Prazos",
+    "pendencias": "Pendências", "contratos": "Contratos", "parcelas": "Parcelas", "recebimentos": "Recebimentos",
+    "despesas": "Despesas", "resultado_financeiro": "Resultado financeiro",
+}
+RELATORIOS_FINANCEIROS = frozenset({"parcelas", "recebimentos", "despesas", "resultado_financeiro"})
+# Quem pode gerar cada relatório (basta uma das permissões). A Master pode todos.
+PERMISSOES_RELATORIO: dict[str, tuple[Permissao, ...]] = {
+    "clientes": (Permissao.CLIENTES,),
+    "processos": (Permissao.PROCESSOS,),
+    "audiencias": (Permissao.AGENDA, Permissao.PENDENCIAS),
+    "prazos": (Permissao.AGENDA, Permissao.PENDENCIAS),
+    "pendencias": (Permissao.PENDENCIAS, Permissao.AGENDA),
+    "contratos": (Permissao.CONTRATOS, Permissao.FINANCEIRO),  # valores só com Financeiro
+    "parcelas": (Permissao.FINANCEIRO,),
+    "recebimentos": (Permissao.FINANCEIRO,),
+    "despesas": (Permissao.FINANCEIRO,),
+    "resultado_financeiro": (Permissao.FINANCEIRO,),
+}
+
+
+def relatorio_permitido(tipo: str, permissoes) -> bool:
+    return any(p in permissoes for p in PERMISSOES_RELATORIO.get(tipo, ()))
+
+
+SITUACOES_RELATORIO: dict[str, dict[str, str]] = {
+    "clientes": {"ativo": "Ativos", "encerrado": "Encerrados"},
+    "processos": {"em_andamento": "Em andamento", "suspenso": "Suspensos", "arquivado": "Arquivados",
+                  "encerrado": "Encerrados"},
+    "audiencias": {"agendado": "Agendadas", "atrasado": "Atrasadas", "concluido": "Concluídas",
+                   "cancelado": "Canceladas"},
+    "prazos": {"agendado": "Em aberto", "atrasado": "Vencidos sem conclusão", "concluido": "Cumpridos",
+               "cancelado": "Cancelados"},
+    "pendencias": {"atrasado": "Somente atrasadas"},
+    "contratos": {"ativo": "Ativos", "quitado": "Quitados", "cancelado": "Cancelados"},
+    "parcelas": {"aberta": "Em aberto", "vencida": "Vencidas", "paga": "Pagas", "cancelada": "Canceladas",
+                 "renegociada": "Renegociadas"},
+    "recebimentos": {"valido": "Válidos", "estornado": "Estornados"},
+    "despesas": {"valida": "Válidas", "cancelada": "Canceladas"},
+    "resultado_financeiro": {},
+}
+FORMATOS_RELATORIO = {"json", "pdf", "xlsx"}
+
+
+class ColunaRelatorio(BaseModel):
+    titulo: str
+    tipo: str = "texto"  # texto | data | data_hora | valor | numero
+    largura: int = 1     # peso relativo da largura no PDF
+
+
+class TotalRelatorio(BaseModel):
+    rotulo: str
+    valor: str
+
+
+class Relatorio(BaseModel):
+    tipo: str
+    titulo: str
+    gerado_em: datetime
+    gerado_por: str
+    filtros: list[str]
+    colunas: list[ColunaRelatorio]
+    linhas: list[list[str | int | Decimal | date | datetime | None]]
+    totais: list[TotalRelatorio] = []
+    observacao: str | None = None
+    confidencial: bool = False
+    limitado: bool = False  # True quando o resultado passou do limite de linhas
+
+
+class CompromissoPainel(BaseModel):
+    id: uuid.UUID
+    titulo: str
+    tipo: str
+    inicio: datetime
+    dia_inteiro: bool
+    cliente_nome: str | None = None
+    responsavel_nome: str | None = None
+    atrasado: bool = False
+
+
+class FinanceiroPainel(BaseModel):
+    recebido_no_mes: Decimal
+    despesas_no_mes: Decimal
+    saldo_do_mes: Decimal
+    total_a_receber: Decimal
+    total_vencido: Decimal
+    parcelas_vencidas: int
+    vencem_em_7_dias: int
+
+
+class Painel(BaseModel):
+    """Cada bloco vem preenchido só para quem tem a permissão da área (None = sem acesso)."""
+    clientes_ativos: int | None = None
+    processos_em_andamento: int | None = None
+    compromissos_hoje: list[CompromissoPainel] | None = None
+    atrasados: list[CompromissoPainel] | None = None
+    total_atrasados: int | None = None
+    proximas_audiencias: list[CompromissoPainel] | None = None
+    proximos_prazos: list[CompromissoPainel] | None = None
+    financeiro: FinanceiroPainel | None = None

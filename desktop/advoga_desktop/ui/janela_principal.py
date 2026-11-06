@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from ..api_client.cliente import ClienteAPI, ErroAPI, ServidorIndisponivel, SessaoExpirada
 from ..recursos_caminho import caminho_recurso
 from .componentes.basicos import rotulo
+from advoga_shared.esquemas import PERMISSOES_RELATORIO, relatorio_permitido
 from advoga_shared.permissoes import Permissao
 
 from .telas.auditoria import TelaAuditoria
@@ -37,6 +38,7 @@ from .telas.financeiro import TelaContratos, TelaFinanceiro
 from .telas.documentos import TelaDocumentos, abrir_documento, limpar_visualizacao
 from .telas.processos import FichaProcesso, TelaProcessos
 from .telas.painel import TelaPainel
+from .telas.relatorios import TelaRelatorios
 from .telas.usuarios import TelaUsuarios
 from .telas.trocar_senha import DialogoTrocarSenha
 from .tema.tema import CORES
@@ -161,6 +163,8 @@ class JanelaPrincipal(QMainWindow):
             self._adicionar_secao(ll, "Financeiro", TelaFinanceiro(api))
         if Permissao.DOCUMENTOS in usuario.permissoes:
             self._adicionar_secao(ll, "Documentos", TelaDocumentos(api))
+        if any(relatorio_permitido(t, usuario.permissoes) for t in PERMISSOES_RELATORIO):
+            self._adicionar_secao(ll, "Relatórios", TelaRelatorios(api))
         if Permissao.ADMIN_USUARIOS in usuario.permissoes:
             self._adicionar_secao(ll, "Usuários e Permissões", TelaUsuarios(api))
         if usuario.is_master:

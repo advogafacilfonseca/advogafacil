@@ -17,6 +17,8 @@ from urllib.parse import urlsplit
 import httpx
 
 from advoga_shared.esquemas import (
+    Painel,
+    Relatorio,
     AutorizacaoGoogle,
     EstadoEmail,
     ConfiguracaoNotificacoes,
@@ -610,6 +612,40 @@ class ClienteAPI:
 
     def baixar_comprovante(self, comprovante_id: str, destino: Path) -> Path:
         return self._baixar(f"/api/financeiro/comprovantes/{comprovante_id}/arquivo", Path(destino))
+
+    # ------------------------------------------------------- painel e relatórios
+    def painel(self) -> Painel:
+        return Painel.model_validate(self._requisitar("GET", "/api/painel"))
+
+    def relatorios_disponiveis(self) -> dict[str, str]:
+        return dict(self._requisitar("GET", "/api/relatorios/disponiveis"))
+
+    @staticmethod
+    def _filtros_relatorio(filtros: dict) -> dict:
+        return {k: str(v) for k, v in filtros.items() if v not in (None, "")}
+
+    def relatorio(self, tipo: str, **filtros: Any) -> Relatorio:
+        return Relatorio.model_validate(self._requisitar("GET", f"/api/relatorios/{tipo}",
+                                                         params=self._filtros_relatorio(filtros),
+                                                         timeout=httpx.Timeout(30.0, read=180.0)))
+
+    def exportar_relatorio(self, tipo: str, formato: str, destino: Path, **filtros: Any) -> Path:
+        """Gera o PDF ou Excel no servidor (com as permissões de quem pede) e grava em destino."""
+        destino = Path(destino)
+        params = self._filtros_relatorio(filtros) | {"formato": formato}
+        cab = {"Authorization": f"Bearer {self.token}"} if self.token else {}
+        r = self._enviar("GET", f"/api/relatorios/{tipo}", cab, params=params,
+                         timeout=httpx.Timeout(30.0, read=300.0))
+        if r.status_code >= 400:
+            self._tratar_resposta(r)
+        parcial = destino.with_name(destino.name + ".gerando")
+        try:
+            parcial.write_bytes(r.content)
+            os.replace(parcial, destino)
+        except OSError as exc:
+            parcial.unlink(missing_ok=True)
+            raise ErroAPI(f"Não foi possível salvar o arquivo em {destino.parent}: {exc.strerror or exc}.") from exc
+        return destino
 
 
 def _em_partes(arquivo, tamanho: int = 1024 * 256):

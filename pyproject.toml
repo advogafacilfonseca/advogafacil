@@ -23,6 +23,8 @@ servidor = [
     "argon2-cffi>=23.1",
     "email-validator>=2.1",
     "cryptography>=42",
+    "reportlab>=4.2",
+    "openpyxl>=3.1",
 ]
 desktop = [
     "PySide6>=6.7",
@@ -44,7 +46,7 @@ advoga-facil = "advoga_desktop.main:main"
 where = ["shared", "server", "desktop"]
 
 [tool.setuptools.package-data]
-advoga_server = ["alembic.ini", "alembic/*.py", "alembic/versions/*.py"]
+advoga_server = ["alembic.ini", "alembic/*.py", "alembic/versions/*.py", "recursos/*"]
 advoga_desktop = ["recursos/*"]
 
 [tool.pytest.ini_options]
