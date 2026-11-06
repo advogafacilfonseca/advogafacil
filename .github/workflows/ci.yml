@@ -75,12 +75,30 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $inst = Get-ChildItem dist\instaladores\AdvogaFacilServidor-Instalador-*.exe | Select-Object -First 1
+          function Diagnostico {
+            Write-Host "===== Serviços"
+            Get-Service AdvogaFacil* -ErrorAction SilentlyContinue | Format-Table Name, Status, StartType | Out-Host
+            Write-Host "===== Portas"
+            Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 5433, 8765 } | Out-Host
+            foreach ($arq in Get-ChildItem "$env:ProgramData\AdvogaFacil\logs" -File -ErrorAction SilentlyContinue) {
+              Write-Host "===== $($arq.FullName)"
+              Get-Content $arq.FullName -Tail 80 | Out-Host
+            }
+            foreach ($arq in Get-ChildItem "$env:ProgramData\AdvogaFacil\postgres\data\log" -File -ErrorAction SilentlyContinue) {
+              Write-Host "===== $($arq.FullName)"
+              Get-Content $arq.FullName -Tail 40 | Out-Host
+            }
+            foreach ($arq in Get-ChildItem inst*.log -ErrorAction SilentlyContinue) {
+              Write-Host "===== $($arq.Name)"
+              Get-Content $arq -Tail 40 | Out-Host
+            }
+          }
           function Esperar-Servidor {
             for ($i = 0; $i -lt 60; $i++) {
               try { return Invoke-RestMethod https://127.0.0.1:8765/api/saude -SkipCertificateCheck -TimeoutSec 5 }
               catch { Start-Sleep -Seconds 3 }
             }
-            Get-Content "$env:ProgramData\AdvogaFacil\logs\*" -ErrorAction SilentlyContinue | Select-Object -Last 80
+            Diagnostico
             throw "O servidor instalado não respondeu."
           }
           # 1) Instalação nova
@@ -116,13 +134,18 @@ jobs:
           Start-Process $inst.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
           if (-not (Test-Path "${env:ProgramFiles}\Advoga Fácil\AdvogaFacil.exe")) { throw "Aplicativo não instalado" }
           Write-Host "Instalador do aplicativo conferido."
+      - name: Reunir registros da instalação
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force logs-instalacao | Out-Null
+          Copy-Item inst*.log logs-instalacao -ErrorAction SilentlyContinue
+          Copy-Item "$env:ProgramData\AdvogaFacil\logs\*" logs-instalacao -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: logs-instalacao
-          path: |
-            inst*.log
-            C:/ProgramData/AdvogaFacil/logs/*
+          path: logs-instalacao
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
