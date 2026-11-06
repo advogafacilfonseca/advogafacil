@@ -31,8 +31,10 @@ from .idempotencia import executar_gravacao
 
 rotas = APIRouter(prefix="/api", tags=["processos"])
 _processos = exige_permissao(Permissao.PROCESSOS)
-_escolher_cliente = exige_alguma_permissao(Permissao.CLIENTES, Permissao.PROCESSOS, Permissao.DOCUMENTOS)
-_escolher_processo = exige_alguma_permissao(Permissao.PROCESSOS, Permissao.DOCUMENTOS)
+_escolher_cliente = exige_alguma_permissao(Permissao.CLIENTES, Permissao.PROCESSOS, Permissao.DOCUMENTOS,
+                                           Permissao.AGENDA, Permissao.PENDENCIAS)
+_escolher_processo = exige_alguma_permissao(Permissao.PROCESSOS, Permissao.DOCUMENTOS, Permissao.AGENDA,
+                                            Permissao.PENDENCIAS)
 
 
 def _gravar(db, ctx, request, acao, status=200) -> JSONResponse:

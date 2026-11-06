@@ -86,6 +86,7 @@ def criar(db: Session, ator: Usuario, dados: ProcessoCriar, ip: str | None) -> P
     auditoria.registrar(db, "processo.criado", usuario_id=ator.id, entidade="processo", entidade_id=p.id,
                         detalhes={"numero": formatar_cnj(p.numero_cnj) or None, "cliente_id": str(p.cliente_id)},
                         ip=ip)
+    _sincronizar_agenda(db, ator, p, ip)
     return p
 
 
@@ -114,7 +115,16 @@ def atualizar(db: Session, ator: Usuario, p: Processo, dados: ProcessoAtualizar,
         db.flush()
         auditoria.registrar(db, "processo.editado", usuario_id=ator.id, entidade="processo", entidade_id=p.id,
                             detalhes=mudancas, ip=ip)
+        if mudancas.keys() & {"proximo_evento_tipo", "proximo_evento_em", "proximo_evento_descricao", "cliente_id",
+                              "advogado_responsavel_id", "numero_cnj", "tipo_acao"}:
+            _sincronizar_agenda(db, ator, p, ip)
     return p
+
+
+def _sincronizar_agenda(db: Session, ator: Usuario, p: Processo, ip: str | None) -> None:
+    from .agenda import sincronizar_processo  # importação tardia: agenda também usa este módulo
+
+    sincronizar_processo(db, ator, p, ip)
 
 
 # ------------------------------------------------------------- movimentações

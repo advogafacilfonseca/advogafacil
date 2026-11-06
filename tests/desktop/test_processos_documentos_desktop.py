@@ -215,7 +215,8 @@ def test_pesquisa_global_abre_processo_e_documento(qtbot, tema, api, cliente_joa
     qtbot.addWidget(janela)
     janela.show()
     menus = [b.text() for b in janela.grupo.buttons()]
-    assert menus[:4] == ["Painel inicial", "Clientes", "Processos", "Documentos"]
+    assert menus[:5] == ["Painel inicial", "Clientes", "Processos", "Agenda", "Central de Pendências"]
+    assert "Documentos" in menus
     janela.pesquisa.setText(cnj(55))
     janela._pesquisar()
     res = janela.tela_resultados

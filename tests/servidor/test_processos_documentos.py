@@ -169,7 +169,7 @@ def test_pesquisa_global_respeita_permissoes(cliente, token_master, cli):
     assert cliente.get("/api/clientes", headers=auth(tp)).status_code == 403
     assert cliente.get("/api/processos", headers=auth(td)).status_code == 403
     assert cliente.get("/api/documentos", headers=auth(tp)).status_code == 403
-    criar_usuario(cliente, token_master, "nada", permissoes=["agenda"])
+    criar_usuario(cliente, token_master, "nada", permissoes=["notificacoes"])
     tn = login(cliente, "nada", "Definitiva2026")
     assert cliente.get("/api/clientes-opcoes", headers=auth(tn), params={"q": "joao"}).status_code == 403
 

@@ -889,3 +889,162 @@ class ResumoFinanceiro(BaseModel):
     saldo_liquido_periodo: Decimal     # recebido no período − despesas no período
     despesas_por_categoria: dict[str, Decimal]
     avisos: list[AvisoFinanceiro]
+
+
+# ======================================================================= agenda (etapa 6)
+TIPOS_COMPROMISSO = {
+    "audiencia": "Audiência", "reuniao": "Reunião", "ligacao": "Ligação", "retorno": "Retorno a cliente",
+    "consulta": "Consulta", "diligencia": "Diligência", "entrega_documentos": "Entrega de documentos",
+    "prazo": "Prazo", "tarefa": "Tarefa", "outro": "Outro compromisso",
+}
+SITUACOES_COMPROMISSO = {"agendado": "Agendado", "concluido": "Concluído", "cancelado": "Cancelado"}
+PRIORIDADES = {"baixa": "Baixa", "normal": "Normal", "alta": "Alta", "urgente": "Urgente"}
+
+
+class _CompromissoBase(BaseModel):
+    titulo: str | None = Field(default=None, max_length=300)
+    tipo: str | None = None
+    cliente_id: uuid.UUID | None = None
+    processo_id: uuid.UUID | None = None
+    responsavel_id: uuid.UUID | None = None
+    inicio: datetime | None = None
+    dia_inteiro: bool | None = None
+    duracao_minutos: int | None = Field(default=None, ge=0, le=24 * 60)
+    local: str | None = Field(default=None, max_length=300)
+    prioridade: str | None = None
+    observacoes: str | None = Field(default=None, max_length=5000)
+
+    @field_validator("titulo", "local")
+    @classmethod
+    def _linha(cls, v: str | None) -> str | None:
+        return " ".join(v.split()) or None if v is not None else None
+
+    @field_validator("observacoes")
+    @classmethod
+    def _obs(cls, v: str | None) -> str | None:
+        return v.strip() or None if v is not None else None
+
+    @field_validator("tipo")
+    @classmethod
+    def _tipo(cls, v: str | None) -> str | None:
+        if v is not None and v not in TIPOS_COMPROMISSO:
+            raise ValueError("Tipo de compromisso inválido.")
+        return v
+
+    @field_validator("prioridade")
+    @classmethod
+    def _prioridade(cls, v: str | None) -> str | None:
+        if v is not None and v not in PRIORIDADES:
+            raise ValueError("Prioridade inválida.")
+        return v
+
+    @field_validator("inicio")
+    @classmethod
+    def _inicio(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v.tzinfo is None:
+            raise ValueError("Data e hora sem fuso horário.")
+        return v
+
+
+class CompromissoCriar(_CompromissoBase):
+    titulo: str = Field(min_length=1, max_length=300)
+    tipo: str
+    inicio: datetime
+    dia_inteiro: bool = False
+    prioridade: str = "normal"
+
+
+class CompromissoAtualizar(_CompromissoBase):
+    versao: int
+
+
+class CompromissoReagendar(BaseModel):
+    versao: int
+    inicio: datetime
+    dia_inteiro: bool | None = None
+    motivo: str | None = Field(default=None, max_length=500)
+
+    @field_validator("inicio")
+    @classmethod
+    def _inicio(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            raise ValueError("Data e hora sem fuso horário.")
+        return v
+
+
+class CompromissoConcluir(BaseModel):
+    versao: int
+    observacao: str | None = Field(default=None, max_length=2000)
+
+
+class CompromissoCancelar(BaseModel):
+    versao: int
+    motivo: str = Field(min_length=3, max_length=500)
+
+
+class CompromissoAtribuir(BaseModel):
+    versao: int
+    responsavel_id: uuid.UUID | None
+
+
+class Compromisso(BaseModel):
+    id: uuid.UUID
+    titulo: str
+    tipo: str
+    cliente_id: uuid.UUID | None
+    cliente_nome: str | None = None
+    processo_id: uuid.UUID | None
+    processo_rotulo: str | None = None
+    responsavel_id: uuid.UUID | None
+    responsavel_nome: str | None = None
+    inicio: datetime
+    dia_inteiro: bool
+    duracao_minutos: int | None
+    local: str | None
+    prioridade: str
+    observacoes: str | None
+    situacao: str
+    atrasado: bool
+    do_processo: bool  # espelha a "próxima audiência ou prazo" do cadastro do processo
+    reagendamentos: int
+    concluido_em: datetime | None = None
+    concluido_por_nome: str | None = None
+    observacao_conclusao: str | None = None
+    cancelado_em: datetime | None = None
+    motivo_cancelamento: str | None = None
+    criado_por_nome: str | None = None
+    criado_em: datetime
+    versao: int
+
+
+class PaginaCompromissos(BaseModel):
+    itens: list[Compromisso]
+    total: int
+
+
+class AvisoAgenda(BaseModel):
+    tipo: str  # hoje | amanha | pendente | atrasado
+    titulo: str
+    compromisso: Compromisso
+
+
+class ItemPendencia(BaseModel):
+    """Uma linha da Central de Pendências: compromisso da agenda ou parcela (só com Financeiro)."""
+    origem: str  # compromisso | parcela
+    grupo: str   # atrasado | hoje | amanha | proximos | pendente
+    titulo: str
+    tipo: str
+    quando: datetime | None = None
+    vencimento: date | None = None
+    cliente_nome: str | None = None
+    processo_rotulo: str | None = None
+    responsavel_nome: str | None = None
+    prioridade: str | None = None
+    compromisso: Compromisso | None = None
+    parcela: Parcela | None = None
+
+
+class CentralPendencias(BaseModel):
+    itens: list[ItemPendencia]
+    contagem: dict[str, int]
+    financeiro_visivel: bool

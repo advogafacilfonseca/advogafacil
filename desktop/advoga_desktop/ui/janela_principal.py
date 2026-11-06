@@ -31,6 +31,7 @@ from advoga_shared.permissoes import Permissao
 
 from .telas.auditoria import TelaAuditoria
 from .telas.clientes import FichaCliente, TelaClientes, TelaResultadosPesquisa
+from .telas.agenda import TelaAgenda, TelaPendencias
 from .telas.financeiro import TelaContratos, TelaFinanceiro
 from .telas.documentos import TelaDocumentos, abrir_documento, limpar_visualizacao
 from .telas.processos import FichaProcesso, TelaProcessos
@@ -143,12 +144,16 @@ class JanelaPrincipal(QMainWindow):
             self._adicionar_secao(ll, "Clientes", self.tela_clientes)
         if Permissao.PROCESSOS in usuario.permissoes:
             self._adicionar_secao(ll, "Processos", TelaProcessos(api))
-        if Permissao.DOCUMENTOS in usuario.permissoes:
-            self._adicionar_secao(ll, "Documentos", TelaDocumentos(api))
+        if Permissao.AGENDA in usuario.permissoes:
+            self._adicionar_secao(ll, "Agenda", TelaAgenda(api))
+        if Permissao.PENDENCIAS in usuario.permissoes:
+            self._adicionar_secao(ll, "Central de Pendências", TelaPendencias(api))
         if Permissao.CONTRATOS in usuario.permissoes or Permissao.FINANCEIRO in usuario.permissoes:
             self._adicionar_secao(ll, "Contratos", TelaContratos(api))
         if Permissao.FINANCEIRO in usuario.permissoes:
             self._adicionar_secao(ll, "Financeiro", TelaFinanceiro(api))
+        if Permissao.DOCUMENTOS in usuario.permissoes:
+            self._adicionar_secao(ll, "Documentos", TelaDocumentos(api))
         if Permissao.ADMIN_USUARIOS in usuario.permissoes:
             self._adicionar_secao(ll, "Usuários e Permissões", TelaUsuarios(api))
         if usuario.is_master:

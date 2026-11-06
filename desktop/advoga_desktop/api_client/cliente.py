@@ -10,12 +10,17 @@ import ssl
 import time
 import uuid
 from pathlib import Path
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
 
 from advoga_shared.esquemas import (
+    AvisoAgenda,
+    CentralPendencias,
+    Compromisso,
+    PaginaCompromissos,
     Cliente,
     Comprovante,
     Contrato,
@@ -484,6 +489,56 @@ class ClienteAPI:
     def resumo_financeiro(self, inicio: str, fim: str) -> ResumoFinanceiro:
         return ResumoFinanceiro.model_validate(
             self._requisitar("GET", "/api/financeiro/resumo", params={"inicio": inicio, "fim": fim}))
+
+    # ------------------------------------------------------------------ agenda e pendências
+    def listar_compromissos(self, inicio: datetime | None = None, fim: datetime | None = None,
+                            **filtros: Any) -> PaginaCompromissos:
+        params: dict[str, Any] = {"inicio": inicio.isoformat() if inicio else None,
+                                  "fim": fim.isoformat() if fim else None} | filtros
+        return PaginaCompromissos.model_validate(self._requisitar(
+            "GET", "/api/agenda/compromissos", params={k: v for k, v in params.items() if v not in (None, "")}))
+
+    def obter_compromisso(self, compromisso_id: str) -> Compromisso:
+        return Compromisso.model_validate(self._requisitar("GET", f"/api/agenda/compromissos/{compromisso_id}"))
+
+    def criar_compromisso(self, dados: dict[str, Any]) -> Compromisso:
+        return Compromisso.model_validate(self._requisitar("POST", "/api/agenda/compromissos", gravacao=True,
+                                                           json=dados))
+
+    def atualizar_compromisso(self, compromisso_id: str, dados: dict[str, Any]) -> Compromisso:
+        return Compromisso.model_validate(self._requisitar("PATCH", f"/api/agenda/compromissos/{compromisso_id}",
+                                                           gravacao=True, json=dados))
+
+    def _acao_compromisso(self, compromisso_id: str, acao: str, dados: dict[str, Any]) -> Compromisso:
+        return Compromisso.model_validate(self._requisitar(
+            "POST", f"/api/agenda/compromissos/{compromisso_id}/{acao}", gravacao=True, json=dados))
+
+    def reagendar_compromisso(self, compromisso_id: str, inicio: datetime, versao: int, dia_inteiro: bool | None = None,
+                              motivo: str | None = None) -> Compromisso:
+        return self._acao_compromisso(compromisso_id, "reagendar", {"inicio": inicio.isoformat(), "versao": versao,
+                                                                     "dia_inteiro": dia_inteiro, "motivo": motivo})
+
+    def concluir_compromisso(self, compromisso_id: str, versao: int, observacao: str | None = None) -> Compromisso:
+        return self._acao_compromisso(compromisso_id, "concluir", {"versao": versao, "observacao": observacao})
+
+    def cancelar_compromisso(self, compromisso_id: str, motivo: str, versao: int) -> Compromisso:
+        return self._acao_compromisso(compromisso_id, "cancelar", {"versao": versao, "motivo": motivo})
+
+    def atribuir_compromisso(self, compromisso_id: str, responsavel_id: str | None, versao: int) -> Compromisso:
+        return self._acao_compromisso(compromisso_id, "atribuir", {"versao": versao, "responsavel_id": responsavel_id})
+
+    def historico_compromisso(self, compromisso_id: str) -> list[ItemAuditoria]:
+        return [ItemAuditoria.model_validate(i)
+                for i in self._requisitar("GET", f"/api/agenda/compromissos/{compromisso_id}/historico")]
+
+    def avisos_agenda(self, somente_meus: bool = False) -> list[AvisoAgenda]:
+        params = {"somente_meus": "true"} if somente_meus else None
+        return [AvisoAgenda.model_validate(i) for i in self._requisitar("GET", "/api/agenda/avisos", params=params)]
+
+    def pendencias(self, **filtros: Any) -> CentralPendencias:
+        params = {k: (v.isoformat() if hasattr(v, "isoformat") else ("true" if v is True else v))
+                  for k, v in filtros.items() if v not in (None, "", False)}
+        return CentralPendencias.model_validate(self._requisitar("GET", "/api/pendencias", params=params))
 
     def enviar_comprovante(self, arquivo: Path) -> Comprovante:
         arquivo = Path(arquivo)

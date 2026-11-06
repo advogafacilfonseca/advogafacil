@@ -103,6 +103,10 @@ class SeletorCliente(QWidget):
         self.nome.setText(nome)
         self.alterado.emit(cliente_id)
 
+    def limpar(self) -> None:
+        self.cliente_id = None
+        self.nome.clear()
+
     def escolher(self) -> None:
         d = DialogoEscolherCliente(self.api, self)
         if d.exec() and d.escolhido:

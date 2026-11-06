@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from advoga_shared import __version__
 
 from .api import (
+    rotas_agenda,
     rotas_auditoria,
     rotas_auth,
     rotas_clientes,
@@ -139,4 +140,5 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
     app.include_router(rotas_processos.rotas)
     app.include_router(rotas_documentos.rotas)
     app.include_router(rotas_financeiro.rotas)
+    app.include_router(rotas_agenda.rotas)
     return app

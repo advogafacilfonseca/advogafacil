@@ -51,6 +51,7 @@ QPushButton {{
 }}
 QPushButton:hover {{ border-color: {dourado}; }}
 QPushButton:disabled {{ color: {texto_suave}; background: {grafite}; }}
+QPushButton:checked {{ color: {dourado_claro}; border-color: {dourado}; }}
 QPushButton#primario {{
     background: {dourado}; color: #111; border: 1px solid {dourado_claro}; font-weight: 600;
 }}
