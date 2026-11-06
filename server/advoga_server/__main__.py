@@ -31,14 +31,71 @@ def _preparar() -> None:
         db.close()
 
 
+def _restaurar(args) -> int:
+    import getpass
+    from pathlib import Path
+
+    from .core.migracoes import atualizar_banco
+    from .services import backup
+
+    cfg = obter_configuracoes()
+    cfg.garantir_pastas()
+    url = args.banco or cfg.url_banco()
+    senha = None
+    if Path(args.origem).suffix.lower() == ".afbk":
+        senha = getpass.getpass("Senha da cópia criptografada: ")
+    try:
+        r = backup.restaurar(cfg, Path(args.origem), url, senha=senha)
+    except backup.FalhaBackup as exc:
+        print(f"RESTAURAÇÃO NÃO REALIZADA: {exc}")
+        return 1
+    except Exception as exc:  # noqa: BLE001
+        print(f"RESTAURAÇÃO NÃO REALIZADA: {exc.__class__.__name__}: {exc}")
+        return 1
+    atualizar_banco(url)
+    print(f"Restauração concluída: versão {r['versao']}, {r['registros']} registros e {r['arquivos']} arquivo(s) "
+          "conferidos.")
+    print("Agora inicie o serviço do Advoga Fácil Servidor e conecte a conta de envio de e-mail de novo.")
+    return 0
+
+
+def _backup_agora(args) -> int:
+    from .core.db import configurar_banco, obter_sessao
+    from .services import backup
+
+    cfg = obter_configuracoes()
+    configurar_banco(cfg.url_banco())
+    db = next(obter_sessao())
+    try:
+        if args.comando == "backup":
+            e = backup.executar(db, cfg, args.tipo, "manual")
+        else:
+            e = backup.testar_restauracao(db, cfg, "manual")
+        print(f"{'Concluído' if e.situacao == 'sucesso' else 'FALHOU'}: {e.mensagem}")
+        return 0 if e.situacao == "sucesso" else 1
+    finally:
+        db.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="advoga-servidor", description="Servidor do Advoga Fácil")
     sub = parser.add_subparsers(dest="comando", required=True)
     sub.add_parser("servir", help="Atualiza o banco e inicia a API")
     sub.add_parser("migrar", help="Somente atualiza a estrutura do banco")
     sub.add_parser("codigo-instalacao", help="Mostra o código para criar a conta Master")
+    b = sub.add_parser("backup", help="Faz um backup agora (usa a configuração da Central de Backups)")
+    b.add_argument("--tipo", choices=["completo", "rapido"], default="completo")
+    sub.add_parser("testar-restauracao", help="Restaura o último backup num banco temporário e confere")
+    r = sub.add_parser("restaurar", help="Restaura um backup num banco VAZIO (veja o guia de recuperação)")
+    r.add_argument("--origem", required=True, help="Pasta do backup, pasta de uma versão ou arquivo .afbk")
+    r.add_argument("--banco", help="URL do banco de destino (padrão: o banco deste servidor)")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+    if args.comando == "restaurar":
+        return _restaurar(args)
+    if args.comando in ("backup", "testar-restauracao"):
+        return _backup_agora(args)
 
     if args.comando in ("migrar", "codigo-instalacao"):
         _preparar()

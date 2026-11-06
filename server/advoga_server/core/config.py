@@ -6,8 +6,10 @@ do código e do programa instalado. No Windows: C:\\ProgramData\\AdvogaFacil.
 
 from __future__ import annotations
 
+import glob
 import json
 import os
+import shutil
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -44,6 +46,14 @@ class Configuracoes(BaseSettings):
     servico_avisos: bool = True
     avisos_intervalo_segundos: int = 300
 
+    # Central de Backups: serviço que roda dentro do servidor.
+    servico_backups: bool = True
+    backups_verificacao_segundos: int = 60
+    # Programas do PostgreSQL (pg_dump/pg_restore) e usuário administrador (criar o banco do teste
+    # de restauração). Se não forem informados, são lidos de config/servidor.json.
+    postgres_bin: Path | None = None
+    postgres_admin_url: str | None = None
+
     @property
     def pasta_config(self) -> Path:
         return self.pasta_dados / "config"
@@ -77,6 +87,41 @@ class Configuracoes(BaseSettings):
             "Banco de dados não configurado. Defina ADVOGA_DATABASE_URL ou "
             f"crie {self.arquivo_servidor}."
         )
+
+    def dados_servidor(self) -> dict:
+        if self.arquivo_servidor.exists():
+            return json.loads(self.arquivo_servidor.read_text(encoding="utf-8-sig"))
+        return {}
+
+    def programa_postgres(self, nome: str) -> str:
+        """Caminho de pg_dump/pg_restore: configurado, do instalador, no PATH ou instalação padrão."""
+        exe = nome + (".exe" if sys.platform == "win32" else "")
+        pastas = [self.postgres_bin, self.dados_servidor().get("postgres_bin")]
+        for pasta in pastas:
+            if pasta and (Path(pasta) / exe).exists():
+                return str(Path(pasta) / exe)
+        achado = shutil.which(nome)
+        if achado:
+            return achado
+        candidatos = sorted(glob.glob(f"/usr/lib/postgresql/*/bin/{nome}"), reverse=True)
+        if sys.platform == "win32":
+            candidatos += sorted(glob.glob(rf"C:\Program Files\PostgreSQL\*\bin\{exe}"), reverse=True)
+        if candidatos:
+            return candidatos[0]
+        raise RuntimeError(f"Programa {nome} do PostgreSQL não encontrado neste computador.")
+
+    def url_admin(self) -> str:
+        """Usuário que pode criar bancos (teste de restauração). Padrão: o do instalador."""
+        if self.postgres_admin_url:
+            return self.postgres_admin_url
+        d = self.dados_servidor()
+        if d.get("postgres_superusuario") and d.get("postgres_superusuario_senha"):
+            from urllib.parse import quote
+
+            porta = d.get("postgres_porta", 5433)
+            return (f"postgresql+psycopg://{quote(d['postgres_superusuario'])}:"
+                    f"{quote(d['postgres_superusuario_senha'])}@127.0.0.1:{porta}/postgres")
+        return self.url_banco()
 
     def garantir_pastas(self) -> None:
         for pasta in (self.pasta_config, self.pasta_documentos, self.pasta_logs):

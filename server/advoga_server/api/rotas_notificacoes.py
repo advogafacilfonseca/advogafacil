@@ -64,7 +64,7 @@ def salvar_configuracao(dados: ConfiguracaoNotificacoesSalvar, request: Request,
 @rotas.get("/historico", response_model=PaginaNotificacoes)
 def historico(
     usuario_id: uuid.UUID | None = None,
-    categoria: str | None = Query(default=None, pattern="^(" + "|".join(CATEGORIAS_NOTIFICACAO) + ")$"),
+    categoria: str | None = Query(default=None, pattern="^(" + "|".join([*CATEGORIAS_NOTIFICACAO, "backups"]) + ")$"),
     situacao: str | None = Query(default=None, pattern="^(" + "|".join(SITUACOES_EMAIL) + ")$"),
     desde: datetime | None = None,
     pagina: int = Query(default=1, ge=1),

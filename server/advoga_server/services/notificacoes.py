@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from advoga_shared.esquemas import (
     CATEGORIAS_FINANCEIRAS,
+    CATEGORIA_BACKUP,
     CATEGORIAS_NOTIFICACAO,
     TIPOS_COMPROMISSO,
     CategoriaNotificacao,
@@ -57,6 +58,8 @@ def _config(db: Session) -> dict:
 def pode_receber(u: Usuario, categoria: str) -> bool:
     if not u.ativo:
         return False
+    if categoria == CATEGORIA_BACKUP:  # falhas de backup e HD desconectado: somente a Master
+        return u.is_master
     perms = permissoes_efetivas(u)
     if Permissao.NOTIFICACOES not in perms:
         return False
@@ -315,6 +318,8 @@ def saida(n: Notificacao, nome: str | None = None) -> NotificacaoSaida:
 def minhas(db: Session, usuario: Usuario, somente_nao_lidas: bool, limite: int) -> tuple[list[Notificacao], int, int]:
     """Avisos do próprio usuário. Avisos financeiros deixam de aparecer se ele perder a permissão."""
     cats = [c for c in CATEGORIAS_NOTIFICACAO if c not in CATEGORIAS_FINANCEIRAS or pode_receber(usuario, c)]
+    if usuario.is_master:
+        cats.append(CATEGORIA_BACKUP)
     base = select(Notificacao).where(Notificacao.usuario_id == usuario.id, Notificacao.categoria.in_(cats))
     nao_lidas = db.scalar(select(func.count()).select_from(base.where(Notificacao.lida_em.is_(None)).subquery())) or 0
     q = base.where(Notificacao.lida_em.is_(None)) if somente_nao_lidas else base

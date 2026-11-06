@@ -17,6 +17,10 @@ from urllib.parse import urlsplit
 import httpx
 
 from advoga_shared.esquemas import (
+    ConfiguracaoBackup,
+    EstadoBackups,
+    ExecucaoBackup,
+    SituacaoDestino,
     Painel,
     Relatorio,
     AutorizacaoGoogle,
@@ -612,6 +616,31 @@ class ClienteAPI:
 
     def baixar_comprovante(self, comprovante_id: str, destino: Path) -> Path:
         return self._baixar(f"/api/financeiro/comprovantes/{comprovante_id}/arquivo", Path(destino))
+
+    # --------------------------------------------------------- central de backups
+    def estado_backups(self) -> EstadoBackups:
+        return EstadoBackups.model_validate(self._requisitar("GET", "/api/backups/estado"))
+
+    def salvar_configuracao_backups(self, dados: dict[str, Any]) -> ConfiguracaoBackup:
+        return ConfiguracaoBackup.model_validate(self._requisitar("PUT", "/api/backups/configuracao", json=dados))
+
+    def definir_senha_copia_backup(self, senha: str, confirmacao: str) -> str:
+        return self._requisitar("POST", "/api/backups/senha-copia",
+                                json={"senha": senha, "confirmacao": confirmacao})["mensagem"]
+
+    def verificar_destino_backup(self, caminho: str) -> SituacaoDestino:
+        return SituacaoDestino.model_validate(self._requisitar("GET", "/api/backups/verificar-destino",
+                                                               params={"caminho": caminho}))
+
+    def historico_backups(self, limite: int = 200) -> list[ExecucaoBackup]:
+        return [ExecucaoBackup.model_validate(e) for e in
+                self._requisitar("GET", "/api/backups/historico", params={"limite": limite})]
+
+    def executar_backup(self, tipo: str) -> str:
+        return self._requisitar("POST", "/api/backups/executar", json={"tipo": tipo})["mensagem"]
+
+    def testar_restauracao_backup(self) -> str:
+        return self._requisitar("POST", "/api/backups/testar-restauracao")["mensagem"]
 
     # ------------------------------------------------------- painel e relatórios
     def painel(self) -> Painel:

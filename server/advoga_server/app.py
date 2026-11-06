@@ -16,6 +16,7 @@ from .api import (
     rotas_agenda,
     rotas_auditoria,
     rotas_auth,
+    rotas_backups,
     rotas_clientes,
     rotas_documentos,
     rotas_email,
@@ -128,11 +129,19 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
 
             servico = ServicoAvisos(cfg.avisos_intervalo_segundos, cfg)
             servico.iniciar()
+        backups = None
+        if cfg.servico_backups:
+            from .services.servico_backups import ServicoBackups
+
+            backups = ServicoBackups(cfg, cfg.backups_verificacao_segundos)
+            backups.iniciar()
         try:
             yield
         finally:
             if servico:
                 servico.parar()
+            if backups:
+                backups.parar()
 
     app = FastAPI(
         lifespan=ciclo_de_vida,
@@ -163,4 +172,5 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
     app.include_router(rotas_notificacoes.rotas)
     app.include_router(rotas_email.rotas)
     app.include_router(rotas_relatorios.rotas)
+    app.include_router(rotas_backups.rotas)
     return app

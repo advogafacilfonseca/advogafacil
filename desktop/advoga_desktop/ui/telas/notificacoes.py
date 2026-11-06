@@ -221,6 +221,7 @@ class TelaNotificacoes(QWidget):
         for k, v in CATEGORIAS_NOTIFICACAO.items():
             if k != "financeiro" or Permissao.FINANCEIRO in api.usuario.permissoes:
                 self.f_categoria.addItem(v, k)
+        self.f_categoria.addItem("Backups (falhas e alertas)", "backups")
         self.f_situacao = QComboBox()
         self.f_situacao.setMinimumHeight(36)
         self.f_situacao.addItem("Todas as situações", None)

@@ -37,6 +37,7 @@ from .telas.agenda import TelaAgenda, TelaPendencias
 from .telas.financeiro import TelaContratos, TelaFinanceiro
 from .telas.documentos import TelaDocumentos, abrir_documento, limpar_visualizacao
 from .telas.processos import FichaProcesso, TelaProcessos
+from .telas.backups import TelaBackups
 from .telas.painel import TelaPainel
 from .telas.relatorios import TelaRelatorios
 from .telas.usuarios import TelaUsuarios
@@ -169,6 +170,7 @@ class JanelaPrincipal(QMainWindow):
             self._adicionar_secao(ll, "Usuários e Permissões", TelaUsuarios(api))
         if usuario.is_master:
             self._adicionar_secao(ll, "Notificações", TelaNotificacoes(api))
+            self._adicionar_secao(ll, "Central de Backups", TelaBackups(api))
             self._adicionar_secao(ll, "Auditoria", TelaAuditoria(api))
         ll.addStretch()
         ll.addWidget(rotulo(f"  Versão {self._versao()}", "rotuloCampo"))

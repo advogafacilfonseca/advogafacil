@@ -1270,3 +1270,73 @@ class Painel(BaseModel):
     proximas_audiencias: list[CompromissoPainel] | None = None
     proximos_prazos: list[CompromissoPainel] | None = None
     financeiro: FinanceiroPainel | None = None
+
+
+# ======================================================================= backups (etapa 9)
+CATEGORIA_BACKUP = "backups"  # avisos de backup: somente para a Master
+TIPOS_BACKUP = {"rapido": "Backup rápido", "completo": "Backup completo", "teste_restauracao": "Teste de restauração"}
+SITUACOES_BACKUP = {"em_andamento": "Em andamento", "sucesso": "Concluído", "falhou": "Falhou"}
+
+
+class ConfiguracaoBackup(BaseModel):
+    ativo: bool = False
+    destino: str | None = Field(default=None, max_length=400)       # pasta no HD externo (no computador servidor)
+    intervalo_horas: int = Field(default=4, ge=0, le=24)           # backup rápido; 0 = desligado
+    hora_completo: str = Field(default="23:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    reter_dias: int = Field(default=60, ge=7, le=3650)
+    teste_restauracao_dias: int = Field(default=7, ge=0, le=90)    # 0 = desligado
+    copia_secundaria_ativa: bool = False
+    destino_secundario: str | None = Field(default=None, max_length=400)
+    reter_copias_secundarias: int = Field(default=14, ge=1, le=365)
+    senha_copia_definida: bool = False                             # somente leitura
+
+
+class SenhaCopiaBackup(BaseModel):
+    senha: str = Field(min_length=12, max_length=200)
+    confirmacao: str
+
+    @model_validator(mode="after")
+    def _conferir(self) -> "SenhaCopiaBackup":
+        if self.senha != self.confirmacao:
+            raise ValueError("A confirmação não confere com a senha.")
+        return self
+
+
+class ExecutarBackup(BaseModel):
+    tipo: str = Field(pattern="^(rapido|completo)$")
+
+
+class ExecucaoBackup(BaseModel):
+    id: uuid.UUID
+    tipo: str
+    origem: str
+    situacao: str
+    iniciado_em: datetime
+    concluido_em: datetime | None = None
+    versao: str | None = None
+    destino: str | None = None
+    tamanho_bytes: int | None = None
+    arquivos_novos: int | None = None
+    arquivos_total: int | None = None
+    copia_secundaria: str | None = None
+    mensagem: str | None = None
+    iniciado_por_nome: str | None = None
+
+
+class SituacaoDestino(BaseModel):
+    caminho: str | None
+    disponivel: bool
+    livre_bytes: int | None = None
+    total_bytes: int | None = None
+    mensagem: str
+
+
+class EstadoBackups(BaseModel):
+    configuracao: ConfiguracaoBackup
+    destino: SituacaoDestino
+    destino_secundario: SituacaoDestino | None = None
+    ultimo_sucesso: ExecucaoBackup | None = None
+    ultimo_completo: ExecucaoBackup | None = None
+    ultimo_teste: ExecucaoBackup | None = None
+    em_andamento: ExecucaoBackup | None = None
+    alertas: list[str] = []
