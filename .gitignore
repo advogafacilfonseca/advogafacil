@@ -10,3 +10,4 @@ dados/
 *.dump
 *.sqlite
 .env
+tests/desktop/capturas/

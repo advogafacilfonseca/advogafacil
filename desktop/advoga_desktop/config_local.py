@@ -1,0 +1,54 @@
+"""Configuração local de cada computador (somente o endereço do servidor).
+
+Nenhum dado do escritório fica neste arquivo. No Windows: %APPDATA%\\AdvogaFacil\\cliente.json
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+
+def pasta_config_local() -> Path:
+    if sys.platform == "win32":
+        return Path(os.environ.get("APPDATA", Path.home())) / "AdvogaFacil"
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "advogafacil"
+
+
+@dataclass
+class ConfigLocal:
+    endereco_servidor: str = ""
+    ultimo_usuario: str = ""
+
+    @classmethod
+    def carregar(cls) -> "ConfigLocal":
+        arq = pasta_config_local() / "cliente.json"
+        if not arq.exists():
+            return cls()
+        try:
+            dados = json.loads(arq.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return cls()
+        return cls(**{k: v for k, v in dados.items() if k in cls.__dataclass_fields__})
+
+    def salvar(self) -> None:
+        pasta = pasta_config_local()
+        pasta.mkdir(parents=True, exist_ok=True)
+        (pasta / "cliente.json").write_text(json.dumps(asdict(self), ensure_ascii=False, indent=2),
+                                            encoding="utf-8")
+
+
+def normalizar_endereco(texto: str) -> str:
+    """Aceita 'servidor', 'servidor:8765' ou 'http(s)://servidor:8765'."""
+    t = (texto or "").strip().rstrip("/")
+    if not t:
+        return ""
+    if "://" not in t:
+        t = "http://" + t
+    esquema, resto = t.split("://", 1)
+    if ":" not in resto.split("/")[0]:
+        resto = resto.split("/")[0] + ":8765"
+    return f"{esquema}://{resto.split('/')[0]}"

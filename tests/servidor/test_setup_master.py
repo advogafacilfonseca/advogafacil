@@ -11,7 +11,7 @@ from sqlalchemy.exc import DBAPIError
 from advoga_server.models import Auditoria, Configuracao, Usuario
 from advoga_server.services.servidor import CHAVE_CODIGO
 
-from .conftest import SENHA_MASTER, dados_master
+from tests.conftest import SENHA_MASTER, dados_master
 
 
 def test_saude_informa_nao_configurado(cliente, codigo):

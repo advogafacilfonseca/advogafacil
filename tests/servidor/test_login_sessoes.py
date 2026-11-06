@@ -10,7 +10,7 @@ from advoga_server.core.seguranca import gerar_hash_senha
 from advoga_server.models import Auditoria, Sessao, Usuario
 from advoga_server.services.autenticacao import agora
 
-from .conftest import SENHA_MASTER
+from tests.conftest import SENHA_MASTER
 
 
 def _auth(token: str) -> dict:
