@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from advoga_shared import __version__
 
-from .api import rotas_auditoria, rotas_auth, rotas_sistema, rotas_usuarios
+from .api import rotas_auditoria, rotas_auth, rotas_clientes, rotas_sistema, rotas_usuarios
 from .core.config import Configuracoes, obter_configuracoes
 from .core.db import configurar_banco
 
@@ -31,6 +31,15 @@ _NOMES_CAMPOS = {
     "nome_exibicao": "Nome de exibição",
     "cargo": "Cargo",
     "permissoes": "Permissões",
+    "cpf": "CPF",
+    "rg": "RG",
+    "data_nascimento": "Data de nascimento",
+    "telefone_principal": "Telefone principal",
+    "telefone_secundario": "Segundo telefone",
+    "cep": "CEP",
+    "uf": "UF",
+    "motivo": "Motivo",
+    "versao": "Versão",
 }
 
 
@@ -44,6 +53,8 @@ def _mensagem_validacao(erro: dict) -> str:
         return f"{nome}: preenchimento muito curto."
     if tipo == "string_too_long":
         return f"{nome}: preenchimento muito longo."
+    if tipo.startswith("date") or tipo.startswith("uuid"):
+        return f"{nome}: valor inválido."
     if campo == "email":
         return "Informe um e-mail válido."
     msg = str(erro.get("msg", "Dados inválidos."))
@@ -75,4 +86,5 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
     app.include_router(rotas_auth.rotas)
     app.include_router(rotas_usuarios.rotas)
     app.include_router(rotas_auditoria.rotas)
+    app.include_router(rotas_clientes.rotas)
     return app

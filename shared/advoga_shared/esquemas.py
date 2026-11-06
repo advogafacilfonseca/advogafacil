@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from .permissoes import Permissao
+from .validacoes import UFS, cpf_valido, somente_digitos
 
 PADRAO_NOME_USUARIO = re.compile(r"^[a-z0-9._-]{3,40}$")
 SENHA_MINIMO = 10
@@ -210,3 +211,166 @@ class PaginaAuditoria(BaseModel):
     total: int
     pagina: int
     por_pagina: int
+
+
+# ----------------------------------------------------------------- clientes
+
+class _ClienteBase(BaseModel):
+    nome_completo: str | None = Field(default=None, max_length=150)
+    cpf: str | None = Field(default=None, max_length=20)
+    rg: str | None = Field(default=None, max_length=30)
+    data_nascimento: date | None = None
+    telefone_principal: str | None = Field(default=None, max_length=20)
+    telefone_secundario: str | None = Field(default=None, max_length=20)
+    email: EmailStr | None = None
+    cep: str | None = Field(default=None, max_length=10)
+    logradouro: str | None = Field(default=None, max_length=200)
+    numero: str | None = Field(default=None, max_length=20)
+    complemento: str | None = Field(default=None, max_length=100)
+    bairro: str | None = Field(default=None, max_length=100)
+    cidade: str | None = Field(default=None, max_length=100)
+    uf: str | None = Field(default=None, max_length=2)
+    observacoes: str | None = Field(default=None, max_length=5000)
+    data_inicio_atendimento: date | None = None
+    advogado_responsavel_id: uuid.UUID | None = None
+
+    @field_validator("nome_completo", "rg", "logradouro", "numero", "complemento", "bairro", "cidade")
+    @classmethod
+    def _texto(cls, v: str | None) -> str | None:
+        return _limpar(v)
+
+    @field_validator("observacoes")
+    @classmethod
+    def _obs(cls, v: str | None) -> str | None:
+        v = (v or "").strip()
+        return v or None
+
+    @field_validator("cpf")
+    @classmethod
+    def _cpf(cls, v: str | None) -> str | None:
+        d = somente_digitos(v)
+        if not d:
+            return None
+        if not cpf_valido(d):
+            raise ValueError("CPF inválido. Confira os números digitados.")
+        return d
+
+    @field_validator("telefone_principal", "telefone_secundario")
+    @classmethod
+    def _tel(cls, v: str | None) -> str | None:
+        d = somente_digitos(v)
+        if not d:
+            return None
+        if len(d) not in (10, 11):
+            raise ValueError("Telefone inválido. Informe DDD e número (10 ou 11 dígitos).")
+        return d
+
+    @field_validator("cep")
+    @classmethod
+    def _cep(cls, v: str | None) -> str | None:
+        d = somente_digitos(v)
+        if not d:
+            return None
+        if len(d) != 8:
+            raise ValueError("CEP inválido. Informe 8 dígitos.")
+        return d
+
+    @field_validator("uf")
+    @classmethod
+    def _uf(cls, v: str | None) -> str | None:
+        v = (v or "").strip().upper()
+        if not v:
+            return None
+        if v not in UFS:
+            raise ValueError("UF inválida.")
+        return v
+
+    @field_validator("data_nascimento")
+    @classmethod
+    def _nasc(cls, v: date | None) -> date | None:
+        if v and (v > date.today() or v.year < 1900):
+            raise ValueError("Data de nascimento inválida.")
+        return v
+
+
+class ClienteCriar(_ClienteBase):
+    nome_completo: str = Field(min_length=3, max_length=150)
+    # Quando já existe cliente com o mesmo nome e nascimento (sem CPF), o servidor pede confirmação.
+    confirmar_possivel_duplicidade: bool = False
+
+
+class ClienteAtualizar(_ClienteBase):
+    versao: int
+
+
+class ClienteEncerrar(BaseModel):
+    motivo: str = Field(min_length=3, max_length=500)
+    versao: int
+
+
+class Cliente(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    nome_completo: str
+    cpf: str | None
+    rg: str | None
+    data_nascimento: date | None
+    telefone_principal: str | None
+    telefone_secundario: str | None
+    email: str | None
+    cep: str | None
+    logradouro: str | None
+    numero: str | None
+    complemento: str | None
+    bairro: str | None
+    cidade: str | None
+    uf: str | None
+    observacoes: str | None
+    data_inicio_atendimento: date | None
+    advogado_responsavel_id: uuid.UUID | None
+    advogado_responsavel_nome: str | None = None
+    situacao: str
+    encerrado_em: datetime | None
+    motivo_encerramento: str | None
+    criado_em: datetime
+    atualizado_em: datetime
+    versao: int
+
+
+class ClienteResumo(BaseModel):
+    id: uuid.UUID
+    nome_completo: str
+    cpf: str | None
+    telefone_principal: str | None
+    cidade: str | None
+    uf: str | None
+    situacao: str
+    advogado_responsavel_nome: str | None = None
+
+
+class PaginaClientes(BaseModel):
+    itens: list[ClienteResumo]
+    total: int
+    pagina: int
+    por_pagina: int
+
+
+class ResultadoPesquisa(BaseModel):
+    tipo: str  # "cliente" (processos e outros registros entram nas próximas etapas)
+    id: uuid.UUID
+    titulo: str
+    resumo: str
+
+
+class PaginaPesquisa(BaseModel):
+    termo: str
+    itens: list[ResultadoPesquisa]
+    total: int
+    pagina: int
+    por_pagina: int
+
+
+class OpcaoUsuario(BaseModel):
+    id: uuid.UUID
+    nome: str

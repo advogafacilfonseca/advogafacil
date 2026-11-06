@@ -58,7 +58,7 @@ def banco_limpo(url_banco) -> None:
     with eng.begin() as c:
         c.execute(text("SET session_replication_role = replica"))
         c.execute(text(
-            "TRUNCATE chaves_idempotencia, auditoria, sessoes, permissoes_usuario, configuracoes, usuarios, "
+            "TRUNCATE clientes, chaves_idempotencia, auditoria, sessoes, permissoes_usuario, configuracoes, usuarios, "
             "identidade_servidor CASCADE"
         ))
     eng.dispose()
