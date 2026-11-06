@@ -1048,3 +1048,92 @@ class CentralPendencias(BaseModel):
     itens: list[ItemPendencia]
     contagem: dict[str, int]
     financeiro_visivel: bool
+
+
+# ================================================================ notificações (etapa 7)
+CATEGORIAS_NOTIFICACAO = {
+    "audiencias": "Audiências (hoje e amanhã)",
+    "reunioes": "Reuniões (hoje e amanhã)",
+    "prazos": "Prazos (hoje e amanhã)",
+    "ligacoes_retornos": "Ligações e retornos a clientes pendentes",
+    "outros_compromissos": "Outros compromissos (consultas, diligências, entregas, tarefas)",
+    "atrasados": "Compromissos atrasados",
+    "financeiro": "Avisos financeiros (vencimentos e parcelas atrasadas)",
+}
+CATEGORIAS_FINANCEIRAS = frozenset({"financeiro"})
+SITUACOES_EMAIL = {
+    "pendente": "Aguardando envio",
+    "enviado": "Enviado",
+    "falhou": "Falhou",
+    "rejeitado": "Rejeitado pelo servidor de e-mail",
+    "nao_configurado": "Não enviado: serviço de envio não configurado",
+    "desativado": "Não enviado: envio por e-mail desligado",
+    "sem_email": "Não enviado: usuário sem e-mail",
+    "cancelado": "Não enviado: o aviso deixou de valer",
+}
+
+
+class CategoriaNotificacao(BaseModel):
+    categoria: str
+    rotulo: str
+    restrita_financeiro: bool
+    incluir_responsavel: bool | None  # None: não se aplica (avisos financeiros)
+    usuarios_ids: list[uuid.UUID]
+
+
+class UsuarioNotificavel(BaseModel):
+    id: uuid.UUID
+    nome: str
+    email: str
+    recebe_notificacoes: bool   # tem a permissão "Recebimento de notificações"
+    acessa_agenda: bool         # agenda ou pendências
+    acessa_financeiro: bool
+
+
+class ConfiguracaoNotificacoes(BaseModel):
+    categorias: list[CategoriaNotificacao]
+    usuarios: list[UsuarioNotificavel]
+    email_ativo: bool
+    hora_inicio: str  # "HH:MM": avisos do dia começam a ser gerados a partir deste horário
+
+
+class CategoriaSalvar(BaseModel):
+    categoria: str
+    incluir_responsavel: bool = False
+    usuarios_ids: list[uuid.UUID] = Field(default_factory=list, max_length=200)
+
+
+class ConfiguracaoNotificacoesSalvar(BaseModel):
+    categorias: list[CategoriaSalvar]
+    email_ativo: bool = True
+    hora_inicio: str = Field(default="07:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+class Notificacao(BaseModel):
+    id: uuid.UUID
+    categoria: str
+    titulo: str
+    mensagem: str
+    entidade: str | None
+    entidade_id: str | None
+    usuario_id: uuid.UUID
+    usuario_nome: str | None = None
+    criada_em: datetime
+    lida_em: datetime | None
+    email_situacao: str
+    email_tentativas: int
+    email_erro: str | None
+    email_enviado_em: datetime | None
+
+
+class PaginaNotificacoes(BaseModel):
+    itens: list[Notificacao]
+    total: int
+    nao_lidas: int
+
+
+class ResultadoCiclo(BaseModel):
+    geradas: int
+    enviadas: int
+    falhas: int
+    nao_enviadas: int

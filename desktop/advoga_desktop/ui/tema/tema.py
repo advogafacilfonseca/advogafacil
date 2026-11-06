@@ -51,6 +51,7 @@ QPushButton {{
 }}
 QPushButton:hover {{ border-color: {dourado}; }}
 QPushButton:disabled {{ color: {texto_suave}; background: {grafite}; }}
+QPushButton#botaoAvisos[pendente="true"] {{ color: {fundo}; background: {dourado}; border-color: {dourado}; font-weight: 600; }}
 QPushButton:checked {{ color: {dourado_claro}; border-color: {dourado}; }}
 QPushButton#primario {{
     background: {dourado}; color: #111; border: 1px solid {dourado_claro}; font-weight: 600;
@@ -81,6 +82,7 @@ QCheckBox {{ background: transparent; spacing: 8px; padding: 3px 0; }}
 QCheckBox::indicator {{ width: 16px; height: 16px; border: 1px solid {borda}; border-radius: 3px; background: {grafite}; }}
 QCheckBox::indicator:checked {{ background: {dourado}; border-color: {dourado_claro}; }}
 QCheckBox:disabled {{ color: {texto_suave}; }}
+QCheckBox::indicator:disabled {{ background: {fundo}; border: 1px dashed {grafite_claro}; }}
 QScrollArea {{ border: none; }}
 QSplitter::handle {{ background: {fundo}; width: 12px; }}
 QTabWidget::pane {{ border: 1px solid {borda}; border-radius: 6px; top: -1px; background: {superficie}; }}

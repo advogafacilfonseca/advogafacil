@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -18,6 +19,7 @@ from .api import (
     rotas_clientes,
     rotas_documentos,
     rotas_financeiro,
+    rotas_notificacoes,
     rotas_processos,
     rotas_sistema,
     rotas_usuarios,
@@ -116,7 +118,22 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
     cfg = cfg or obter_configuracoes()
     configurar_banco(cfg.url_banco())
 
+    @asynccontextmanager
+    async def ciclo_de_vida(_app: FastAPI):
+        servico = None
+        if cfg.servico_avisos:
+            from .services.servico_avisos import ServicoAvisos
+
+            servico = ServicoAvisos(cfg.avisos_intervalo_segundos)
+            servico.iniciar()
+        try:
+            yield
+        finally:
+            if servico:
+                servico.parar()
+
     app = FastAPI(
+        lifespan=ciclo_de_vida,
         title="Advoga Fácil — Servidor",
         version=__version__,
         docs_url=None,  # documentação interativa desligada em produção
@@ -141,4 +158,5 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
     app.include_router(rotas_documentos.rotas)
     app.include_router(rotas_financeiro.rotas)
     app.include_router(rotas_agenda.rotas)
+    app.include_router(rotas_notificacoes.rotas)
     return app

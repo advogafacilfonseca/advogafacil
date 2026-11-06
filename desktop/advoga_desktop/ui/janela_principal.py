@@ -31,6 +31,7 @@ from advoga_shared.permissoes import Permissao
 
 from .telas.auditoria import TelaAuditoria
 from .telas.clientes import FichaCliente, TelaClientes, TelaResultadosPesquisa
+from .telas.notificacoes import PainelAvisos, TelaNotificacoes
 from .telas.agenda import TelaAgenda, TelaPendencias
 from .telas.financeiro import TelaContratos, TelaFinanceiro
 from .telas.documentos import TelaDocumentos, abrir_documento, limpar_visualizacao
@@ -115,6 +116,12 @@ class JanelaPrincipal(QMainWindow):
         self.pesquisa.setMaxLength(100)
         lc.addWidget(self.pesquisa)
         lc.addSpacing(16)
+        self.btn_avisos = QPushButton("Avisos")
+        self.btn_avisos.setObjectName("botaoAvisos")
+        self.btn_avisos.setToolTip("Meus avisos de agenda e financeiro")
+        self.btn_avisos.clicked.connect(self.abrir_avisos)
+        lc.addWidget(self.btn_avisos)
+        lc.addSpacing(8)
         self.btn_usuario = QPushButton(f"{usuario.nome_exibicao}  ·  {usuario.cargo or ''}".strip(" ·"))
         menu = QMenu(self)
         menu.addAction("Alterar minha senha", self._trocar_senha)
@@ -157,6 +164,7 @@ class JanelaPrincipal(QMainWindow):
         if Permissao.ADMIN_USUARIOS in usuario.permissoes:
             self._adicionar_secao(ll, "Usuários e Permissões", TelaUsuarios(api))
         if usuario.is_master:
+            self._adicionar_secao(ll, "Notificações", TelaNotificacoes(api))
             self._adicionar_secao(ll, "Auditoria", TelaAuditoria(api))
         ll.addStretch()
         ll.addWidget(rotulo(f"  Versão {self._versao()}", "rotuloCampo"))
@@ -186,6 +194,10 @@ class JanelaPrincipal(QMainWindow):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._checar_servidor)
         self._timer.start(15_000)
+        self._timer_avisos = QTimer(self)
+        self._timer_avisos.timeout.connect(self.atualizar_avisos)
+        self._timer_avisos.start(60_000)
+        self.atualizar_avisos()
 
     @staticmethod
     def _versao() -> str:
@@ -265,11 +277,37 @@ class JanelaPrincipal(QMainWindow):
         except ErroAPI:
             pass  # mesmo sem servidor, a sessão local é descartada
         self._timer.stop()
+        self._timer_avisos.stop()
         limpar_visualizacao()
         self._saindo = True
         self.sessao_encerrada.emit("")
 
+    def atualizar_avisos(self) -> None:
+        """Número de avisos não lidos no botão do cabeçalho (consulta leve, a cada minuto)."""
+        if not self.servidor_ok or self._saindo:
+            return
+        try:
+            n = self.api.minhas_notificacoes(somente_nao_lidas=True, limite=1).nao_lidas
+        except SessaoExpirada as exc:
+            self._timer_avisos.stop()
+            self._saindo = True
+            self.sessao_encerrada.emit(exc.mensagem)
+            return
+        except ErroAPI:
+            return
+        self.btn_avisos.setText(f"Avisos ({n})" if n else "Avisos")
+        self.btn_avisos.setProperty("pendente", bool(n))
+        self.btn_avisos.style().unpolish(self.btn_avisos)
+        self.btn_avisos.style().polish(self.btn_avisos)
+
+    def abrir_avisos(self) -> None:
+        painel = PainelAvisos(self.api, self)
+        painel.alterado.connect(self.atualizar_avisos)
+        painel.exec()
+        self.atualizar_avisos()
+
     def closeEvent(self, evento) -> None:  # noqa: N802 (nome do Qt)
+        self._timer_avisos.stop()
         if not self._saindo:
             try:
                 self.api.logout()

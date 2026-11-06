@@ -40,6 +40,10 @@ class Configuracoes(BaseSettings):
     login_max_tentativas: int = 5
     login_bloqueio_minutos: int = 15
 
+    # Serviço de avisos (agenda e financeiro) que roda dentro do servidor.
+    servico_avisos: bool = True
+    avisos_intervalo_segundos: int = 300
+
     @property
     def pasta_config(self) -> Path:
         return self.pasta_dados / "config"

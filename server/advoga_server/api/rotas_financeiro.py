@@ -158,6 +158,16 @@ def listar_parcelas(filtro: str = Query(default="abertas", pattern="^(abertas|ve
             "por_pagina": por_pagina}
 
 
+@rotas.get("/financeiro/parcelas/{parcela_id}", response_model=Parcela)
+def obter_parcela(parcela_id: uuid.UUID, ctx: Contexto = Depends(_financeiro), db: Session = Depends(obter_db)):
+    from ..models import Parcela as ParcelaModelo
+
+    p = db.get(ParcelaModelo, parcela_id)
+    if p is None:
+        raise HTTPException(404, "Parcela não encontrada.")
+    return svc._parcela_saida(p, svc._pagos(db, [p.id]).get(p.id, svc.ZERO))
+
+
 @rotas.post("/financeiro/parcelas/{parcela_id}/cancelar", response_model=Parcela)
 def cancelar_parcela(parcela_id: uuid.UUID, dados: ParcelaCancelar, request: Request,
                      ctx: Contexto = Depends(_financeiro), db: Session = Depends(obter_db)) -> JSONResponse:

@@ -46,7 +46,7 @@ def url_banco() -> Iterator[str]:
 @pytest.fixture
 def cfg(tmp_path, url_banco) -> Configuracoes:
     c = Configuracoes(pasta_dados=tmp_path / "dados", database_url=url_banco,
-                      login_max_tentativas=3, login_bloqueio_minutos=15)
+                      login_max_tentativas=3, login_bloqueio_minutos=15, servico_avisos=False)
     c.garantir_pastas()
     return c
 
@@ -58,7 +58,7 @@ def banco_limpo(url_banco) -> None:
     with eng.begin() as c:
         c.execute(text("SET session_replication_role = replica"))
         c.execute(text(
-            "TRUNCATE compromissos, pagamentos, parcelas, despesas, contratos, comprovantes, movimentacoes_processo, documentos, processos, clientes, chaves_idempotencia, auditoria, sessoes, permissoes_usuario, configuracoes, usuarios, "
+            "TRUNCATE notificacoes, destinatarios_notificacao, compromissos, pagamentos, parcelas, despesas, contratos, comprovantes, movimentacoes_processo, documentos, processos, clientes, chaves_idempotencia, auditoria, sessoes, permissoes_usuario, configuracoes, usuarios, "
             "identidade_servidor CASCADE"
         ))
     eng.dispose()

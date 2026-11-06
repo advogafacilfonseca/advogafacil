@@ -17,6 +17,10 @@ from urllib.parse import urlsplit
 import httpx
 
 from advoga_shared.esquemas import (
+    ConfiguracaoNotificacoes,
+    Notificacao,
+    PaginaNotificacoes,
+    ResultadoCiclo,
     AvisoAgenda,
     CentralPendencias,
     Compromisso,
@@ -441,6 +445,9 @@ class ClienteAPI:
                              params={k: v for k, v in params.items() if v not in (None, "")})
         return [Parcela.model_validate(i) for i in r["itens"]], r["total"]
 
+    def obter_parcela(self, parcela_id: str) -> Parcela:
+        return Parcela.model_validate(self._requisitar("GET", f"/api/financeiro/parcelas/{parcela_id}"))
+
     def cancelar_parcela(self, parcela_id: str, motivo: str, versao: int) -> Parcela:
         return Parcela.model_validate(self._requisitar(
             "POST", f"/api/financeiro/parcelas/{parcela_id}/cancelar", gravacao=True,
@@ -539,6 +546,35 @@ class ClienteAPI:
         params = {k: (v.isoformat() if hasattr(v, "isoformat") else ("true" if v is True else v))
                   for k, v in filtros.items() if v not in (None, "", False)}
         return CentralPendencias.model_validate(self._requisitar("GET", "/api/pendencias", params=params))
+
+    # ---------------------------------------------------------------------- notificações
+    def minhas_notificacoes(self, somente_nao_lidas: bool = False, limite: int = 100) -> PaginaNotificacoes:
+        params: dict[str, Any] = {"limite": limite}
+        if somente_nao_lidas:
+            params["somente_nao_lidas"] = "true"
+        return PaginaNotificacoes.model_validate(self._requisitar("GET", "/api/notificacoes/minhas", params=params))
+
+    def marcar_notificacoes_lidas(self, ids: list[str] | None = None) -> int:
+        return self._requisitar("POST", "/api/notificacoes/lidas", json={"ids": ids})["marcadas"]
+
+    def configuracao_notificacoes(self) -> ConfiguracaoNotificacoes:
+        return ConfiguracaoNotificacoes.model_validate(self._requisitar("GET", "/api/notificacoes/configuracao"))
+
+    def salvar_configuracao_notificacoes(self, dados: dict[str, Any]) -> ConfiguracaoNotificacoes:
+        return ConfiguracaoNotificacoes.model_validate(self._requisitar(
+            "PUT", "/api/notificacoes/configuracao", gravacao=True, json=dados))
+
+    def historico_notificacoes(self, **filtros: Any) -> PaginaNotificacoes:
+        params = {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in filtros.items()
+                  if v not in (None, "")}
+        return PaginaNotificacoes.model_validate(self._requisitar("GET", "/api/notificacoes/historico", params=params))
+
+    def reenviar_notificacao(self, notificacao_id: str) -> Notificacao:
+        return Notificacao.model_validate(self._requisitar("POST", f"/api/notificacoes/{notificacao_id}/reenviar",
+                                                           gravacao=True))
+
+    def verificar_avisos_agora(self) -> ResultadoCiclo:
+        return ResultadoCiclo.model_validate(self._requisitar("POST", "/api/notificacoes/verificar-agora"))
 
     def enviar_comprovante(self, arquivo: Path) -> Comprovante:
         arquivo = Path(arquivo)
