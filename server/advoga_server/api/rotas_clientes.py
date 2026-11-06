@@ -25,6 +25,8 @@ from advoga_shared.permissoes import Permissao
 
 from ..models import Auditoria, Usuario
 from ..services import clientes as svc
+from ..services import documentos as svc_documentos
+from ..services import processos as svc_processos
 from .deps import Contexto, exige_permissao, obter_db, usuario_atual
 from .idempotencia import executar_gravacao
 
@@ -111,14 +113,44 @@ def pesquisa_global(
     termo = " ".join(q.split())
     if len(termo) < 3:
         raise HTTPException(422, "Digite pelo menos 3 caracteres para pesquisar.")
+    # Cada tipo de registro só entra no resultado se o usuário tiver a permissão correspondente.
+    # A paginação percorre os tipos em sequência: clientes, processos, documentos.
+    fontes = []
+    if ctx.pode(Permissao.CLIENTES):
+        fontes.append(lambda off, lim: _res_clientes(db, termo, off, lim))
+    if ctx.pode(Permissao.PROCESSOS):
+        fontes.append(lambda off, lim: _res_processos(db, termo, off, lim))
+    if ctx.pode(Permissao.DOCUMENTOS):
+        fontes.append(lambda off, lim: _res_documentos(db, termo, off, lim))
     itens: list[ResultadoPesquisa] = []
     total = 0
-    # Cada tipo de registro só entra no resultado se o usuário tiver a permissão correspondente.
-    if ctx.pode(Permissao.CLIENTES):
-        clientes, total = svc.buscar(db, termo, None, pagina, por_pagina)
-        itens = [ResultadoPesquisa(tipo="cliente", id=c.id, titulo=c.nome_completo, resumo=svc.descricao_curta(c))
-                 for c in clientes]
+    inicio = (pagina - 1) * por_pagina
+    for fonte in fontes:
+        _, qtd = fonte(0, 0)
+        if len(itens) < por_pagina and inicio < total + qtd:
+            deslocamento = max(0, inicio - total)
+            encontrados, _ = fonte(deslocamento, por_pagina - len(itens))
+            itens.extend(encontrados)
+        total += qtd
     return PaginaPesquisa(termo=termo, itens=itens, total=total, pagina=pagina, por_pagina=por_pagina)
+
+
+def _res_clientes(db, termo, offset, limite):
+    clientes, total = svc.buscar(db, termo, None, 1, limite, offset=offset)
+    return [ResultadoPesquisa(tipo="cliente", id=c.id, titulo=c.nome_completo, resumo=svc.descricao_curta(c))
+            for c in clientes], total
+
+
+def _res_processos(db, termo, offset, limite):
+    processos, total = svc_processos.buscar(db, termo=termo, offset=offset, limite=limite)
+    return [ResultadoPesquisa(tipo="processo", id=p.id, titulo=svc_processos.rotulo(p),
+                              resumo=svc_processos.descricao_curta(p)) for p in processos], total
+
+
+def _res_documentos(db, termo, offset, limite):
+    docs, total = svc_documentos.buscar(db, termo=termo, offset=offset, limite=limite)
+    return [ResultadoPesquisa(tipo="documento", id=d.id, titulo=d.nome_arquivo,
+                              resumo=svc_documentos.descricao_curta(d)) for d in docs], total
 
 
 @rotas.get("/usuarios-ativos", response_model=list[OpcaoUsuario])

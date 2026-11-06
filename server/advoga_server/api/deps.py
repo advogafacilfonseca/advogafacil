@@ -85,3 +85,22 @@ def exige_master(ctx: Contexto = Depends(usuario_atual), db: Session = Depends(o
         db.commit()
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Somente a Advogada Master pode fazer isso.")
     return ctx
+
+
+def exige_alguma_permissao(*permissoes: Permissao) -> Callable[..., Contexto]:
+    """Libera a rota para quem tiver pelo menos uma das permissões (ex.: escolher o cliente
+    ao cadastrar um processo ou anexar um documento)."""
+
+    def _verificar(
+        ctx: Contexto = Depends(usuario_atual), db: Session = Depends(obter_db)
+    ) -> Contexto:
+        if not any(ctx.pode(p) for p in permissoes):
+            auditoria.registrar(
+                db, "acesso.negado", usuario_id=ctx.usuario.id,
+                detalhes={"permissao": [p.value for p in permissoes]}, ip=ctx.ip,
+            )
+            db.commit()
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Você não tem permissão para acessar esta área.")
+        return ctx
+
+    return _verificar

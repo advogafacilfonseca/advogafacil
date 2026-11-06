@@ -191,8 +191,8 @@ def filtro_texto(termo: str):
     return or_(*condicoes) if condicoes else None
 
 
-def buscar(db: Session, termo: str | None, situacao: str | None, pagina: int, por_pagina: int
-           ) -> tuple[list[ClienteResumo], int]:
+def buscar(db: Session, termo: str | None, situacao: str | None, pagina: int, por_pagina: int,
+           offset: int | None = None) -> tuple[list[ClienteResumo], int]:
     filtros = []
     if termo:
         cond = filtro_texto(termo)
@@ -211,7 +211,7 @@ def buscar(db: Session, termo: str | None, situacao: str | None, pagina: int, po
         select(Cliente, Usuario.nome_completo)
         .outerjoin(Usuario, Usuario.id == Cliente.advogado_responsavel_id)
         .where(*filtros).order_by(*ordem, Cliente.id)
-        .offset((pagina - 1) * por_pagina).limit(por_pagina)
+        .offset((pagina - 1) * por_pagina if offset is None else offset).limit(por_pagina)
     ).all()
     return [resumo(c, adv) for c, adv in linhas], total
 

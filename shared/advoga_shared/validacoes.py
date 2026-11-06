@@ -41,3 +41,24 @@ def formatar_telefone(tel: str | None) -> str:
 def formatar_cep(cep: str | None) -> str:
     d = somente_digitos(cep)
     return f"{d[:5]}-{d[5:]}" if len(d) == 8 else (cep or "")
+
+
+def cnj_valido(numero: str | None) -> bool:
+    """Número único CNJ (NNNNNNN-DD.AAAA.J.TR.OOOO), dígito verificador módulo 97 (Res. CNJ 65/2008)."""
+    d = somente_digitos(numero)
+    if len(d) != 20:
+        return False
+    base = d[:7] + d[9:] + "00"
+    return int(d[7:9]) == 98 - (int(base) % 97)
+
+
+def formatar_cnj(numero: str | None) -> str:
+    d = somente_digitos(numero)
+    if len(d) != 20:
+        return numero or ""
+    return f"{d[:7]}-{d[7:9]}.{d[9:13]}.{d[13]}.{d[14:16]}.{d[16:]}"
+
+
+def digito_cnj(sequencial: str, ano: str, segmento: str, tribunal: str, origem: str) -> str:
+    """Calcula o dígito verificador (usado para conferência e testes)."""
+    return f"{98 - int(sequencial + ano + segmento + tribunal + origem + '00') % 97:02d}"

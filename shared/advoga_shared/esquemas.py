@@ -9,7 +9,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from .permissoes import Permissao
-from .validacoes import UFS, cpf_valido, somente_digitos
+from .validacoes import UFS, cnj_valido, cpf_valido, somente_digitos
 
 PADRAO_NOME_USUARIO = re.compile(r"^[a-z0-9._-]{3,40}$")
 SENHA_MINIMO = 10
@@ -374,3 +374,229 @@ class PaginaPesquisa(BaseModel):
 class OpcaoUsuario(BaseModel):
     id: uuid.UUID
     nome: str
+
+
+class OpcaoCliente(BaseModel):
+    id: uuid.UUID
+    nome: str
+    situacao: str
+
+
+# ------------------------------------------------------------------ processos
+SITUACOES_PROCESSO = {
+    "em_andamento": "Em andamento",
+    "suspenso": "Suspenso",
+    "arquivado": "Arquivado",
+    "encerrado": "Encerrado",
+}
+TIPOS_PROXIMO_EVENTO = {"audiencia": "Audiência", "prazo": "Prazo"}
+
+
+class _ProcessoBase(BaseModel):
+    numero_cnj: str | None = Field(default=None, max_length=30)
+    cliente_id: uuid.UUID | None = None
+    tipo_acao: str | None = Field(default=None, max_length=150)
+    area_juridica: str | None = Field(default=None, max_length=80)
+    tribunal: str | None = Field(default=None, max_length=120)
+    comarca: str | None = Field(default=None, max_length=120)
+    vara: str | None = Field(default=None, max_length=150)
+    parte_contraria: str | None = Field(default=None, max_length=300)
+    advogado_responsavel_id: uuid.UUID | None = None
+    data_distribuicao: date | None = None
+    situacao: str | None = None
+    fase_processual: str | None = Field(default=None, max_length=120)
+    proximo_evento_tipo: str | None = None
+    proximo_evento_em: datetime | None = None
+    proximo_evento_descricao: str | None = Field(default=None, max_length=300)
+    descricao: str | None = Field(default=None, max_length=10000)
+    observacoes: str | None = Field(default=None, max_length=10000)
+
+    @field_validator("tipo_acao", "area_juridica", "tribunal", "comarca", "vara", "parte_contraria",
+                     "fase_processual", "proximo_evento_descricao")
+    @classmethod
+    def _texto(cls, v: str | None) -> str | None:
+        return _limpar(v)
+
+    @field_validator("descricao", "observacoes")
+    @classmethod
+    def _longo(cls, v: str | None) -> str | None:
+        v = (v or "").strip()
+        return v or None
+
+    @field_validator("numero_cnj")
+    @classmethod
+    def _cnj(cls, v: str | None) -> str | None:
+        d = somente_digitos(v)
+        if not d:
+            return None
+        if len(d) != 20:
+            raise ValueError("Número CNJ inválido. Use o formato 0000000-00.0000.0.00.0000 (20 dígitos).")
+        if not cnj_valido(d):
+            raise ValueError("Número CNJ inválido: o dígito verificador não confere. Confira os números.")
+        return d
+
+    @field_validator("situacao")
+    @classmethod
+    def _situacao(cls, v: str | None) -> str | None:
+        if v is not None and v not in SITUACOES_PROCESSO:
+            raise ValueError("Situação inválida.")
+        return v
+
+    @field_validator("proximo_evento_tipo")
+    @classmethod
+    def _evento(cls, v: str | None) -> str | None:
+        if v in (None, ""):
+            return None
+        if v not in TIPOS_PROXIMO_EVENTO:
+            raise ValueError("Tipo inválido: escolha audiência ou prazo.")
+        return v
+
+    @field_validator("data_distribuicao")
+    @classmethod
+    def _distribuicao(cls, v: date | None) -> date | None:
+        if v and (v > date.today() or v.year < 1900):
+            raise ValueError("Data de distribuição inválida.")
+        return v
+
+    @field_validator("proximo_evento_em")
+    @classmethod
+    def _evento_em(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v.tzinfo is None:
+            raise ValueError("Data e hora sem fuso horário.")
+        return v
+
+
+class ProcessoCriar(_ProcessoBase):
+    cliente_id: uuid.UUID
+    situacao: str = "em_andamento"
+
+
+class ProcessoAtualizar(_ProcessoBase):
+    versao: int
+
+
+class Processo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    numero_cnj: str | None
+    cliente_id: uuid.UUID
+    cliente_nome: str | None = None
+    tipo_acao: str | None
+    area_juridica: str | None
+    tribunal: str | None
+    comarca: str | None
+    vara: str | None
+    parte_contraria: str | None
+    advogado_responsavel_id: uuid.UUID | None
+    advogado_responsavel_nome: str | None = None
+    data_distribuicao: date | None
+    situacao: str
+    fase_processual: str | None
+    proximo_evento_tipo: str | None
+    proximo_evento_em: datetime | None
+    proximo_evento_descricao: str | None
+    descricao: str | None
+    observacoes: str | None
+    criado_em: datetime
+    atualizado_em: datetime
+    versao: int
+
+
+class ProcessoResumo(BaseModel):
+    id: uuid.UUID
+    numero_cnj: str | None
+    cliente_id: uuid.UUID
+    cliente_nome: str
+    tipo_acao: str | None
+    parte_contraria: str | None
+    situacao: str
+    fase_processual: str | None
+    proximo_evento_tipo: str | None
+    proximo_evento_em: datetime | None
+    advogado_responsavel_nome: str | None = None
+
+
+class PaginaProcessos(BaseModel):
+    itens: list[ProcessoResumo]
+    total: int
+    pagina: int
+    por_pagina: int
+
+
+class OpcaoProcesso(BaseModel):
+    id: uuid.UUID
+    rotulo: str
+
+
+class MovimentacaoCriar(BaseModel):
+    data_movimentacao: date
+    descricao: str = Field(min_length=3, max_length=5000)
+
+    @field_validator("descricao")
+    @classmethod
+    def _desc(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError("Descreva a movimentação.")
+        return v
+
+    @field_validator("data_movimentacao")
+    @classmethod
+    def _data(cls, v: date) -> date:
+        if v.year < 1900 or v > date.today().replace(year=date.today().year + 5):
+            raise ValueError("Data da movimentação inválida.")
+        return v
+
+
+class Movimentacao(BaseModel):
+    id: int
+    processo_id: uuid.UUID
+    data_movimentacao: date
+    descricao: str
+    registrado_por_nome: str | None
+    registrado_em: datetime
+
+
+# ----------------------------------------------------------------- documentos
+class Documento(BaseModel):
+    id: uuid.UUID
+    cliente_id: uuid.UUID
+    cliente_nome: str | None = None
+    processo_id: uuid.UUID | None
+    processo_rotulo: str | None = None
+    nome_arquivo: str
+    descricao: str | None
+    tipo_conteudo: str | None
+    tamanho: int
+    sha256: str
+    enviado_por_nome: str | None = None
+    criado_em: datetime
+    removido_em: datetime | None = None
+    removido_por_nome: str | None = None
+    motivo_remocao: str | None = None
+    versao: int
+
+
+class DocumentoAtualizar(BaseModel):
+    versao: int
+    nome_arquivo: str | None = Field(default=None, min_length=1, max_length=255)
+    descricao: str | None = Field(default=None, max_length=500)
+    processo_id: uuid.UUID | None = None
+
+    @field_validator("nome_arquivo")
+    @classmethod
+    def _nome(cls, v: str | None) -> str | None:
+        return _limpar(v)
+
+
+class DocumentoRemover(BaseModel):
+    versao: int
+    motivo: str = Field(min_length=3, max_length=500)
+
+
+class PaginaDocumentos(BaseModel):
+    itens: list[Documento]
+    total: int
+    pagina: int
+    por_pagina: int

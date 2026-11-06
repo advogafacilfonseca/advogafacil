@@ -11,7 +11,15 @@ from fastapi.responses import JSONResponse
 
 from advoga_shared import __version__
 
-from .api import rotas_auditoria, rotas_auth, rotas_clientes, rotas_sistema, rotas_usuarios
+from .api import (
+    rotas_auditoria,
+    rotas_auth,
+    rotas_clientes,
+    rotas_documentos,
+    rotas_processos,
+    rotas_sistema,
+    rotas_usuarios,
+)
 from .core.config import Configuracoes, obter_configuracoes
 from .core.db import configurar_banco
 
@@ -40,6 +48,20 @@ _NOMES_CAMPOS = {
     "uf": "UF",
     "motivo": "Motivo",
     "versao": "Versão",
+    "numero_cnj": "Número CNJ",
+    "cliente_id": "Cliente vinculado",
+    "tipo_acao": "Tipo de ação",
+    "area_juridica": "Área jurídica",
+    "parte_contraria": "Parte contrária",
+    "data_distribuicao": "Data de distribuição",
+    "situacao": "Situação",
+    "fase_processual": "Fase processual",
+    "proximo_evento_tipo": "Próxima audiência ou prazo",
+    "proximo_evento_em": "Data da próxima audiência ou prazo",
+    "data_movimentacao": "Data da movimentação",
+    "descricao": "Descrição",
+    "nome_arquivo": "Nome do arquivo",
+    "nome": "Nome do arquivo",
 }
 
 
@@ -87,4 +109,6 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
     app.include_router(rotas_usuarios.rotas)
     app.include_router(rotas_auditoria.rotas)
     app.include_router(rotas_clientes.rotas)
+    app.include_router(rotas_processos.rotas)
+    app.include_router(rotas_documentos.rotas)
     return app
