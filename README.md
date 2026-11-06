@@ -14,9 +14,24 @@ ficam em `C:\ProgramData\AdvogaFacil`. Atualizar ou reinstalar o programa não a
 
 ## Estado atual
 
-Etapas 1 a 10 concluídas: fundação, usuários e permissões, clientes, processos e documentos,
+Etapas 1 a 11 concluídas: fundação, usuários e permissões, clientes, processos e documentos,
 contratos e financeiro, agenda e Central de Pendências, notificações por e-mail, painel e
-relatórios (PDF e Excel), Central de Backups e assistente de migração do servidor. Veja `docs/relatorios/` e `docs/manuais/`.
+relatórios (PDF e Excel), Central de Backups, assistente de migração do servidor, instaladores
+testados de verdade no Windows e manuais. Falta a rodada de testes reais no escritório.
+
+## Manuais
+
+| Manual | Para quem |
+| --- | --- |
+| [Instalação](docs/manuais/instalacao.md) (inclui Tailscale e atualizações) | Quem instala |
+| [Uso](docs/manuais/uso.md) | Toda a equipe |
+| [Administração da Master](docs/manuais/administracao-master.md) | Advogada Master |
+| [Configurar o envio pelo Google](docs/manuais/configurar-envio-google.md) | Advogada Master |
+| [Recuperação de dados](docs/manuais/recuperacao-de-dados.md) | Advogada Master |
+| [Migração do servidor](docs/manuais/migracao-de-servidor.md) | Advogada Master |
+| [Roteiro dos testes reais](docs/manuais/roteiro-testes-reais.md) | Antes de usar com dados reais |
+
+Os relatórios de cada etapa ficam em `docs/relatorios/`.
 
 ## Desenvolvimento
 

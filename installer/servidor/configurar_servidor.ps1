@@ -31,12 +31,22 @@ $ArqServidor = Join-Path $Config "servidor.json"
 if (-not (Test-Path (Join-Path $PgData "PG_VERSION"))) {
     $SenhaSuper = Nova-Senha
     $SenhaApp   = Nova-Senha
+    # O initdb abandona os privilégios de administrador ao rodar (exigência do PostgreSQL). Por isso,
+    # durante a criação do banco, o usuário que instala recebe acesso explícito só à pasta do banco;
+    # o acesso é retirado logo depois.
+    $Eu = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    New-Item -ItemType Directory -Force -Path $PgData | Out-Null
+    icacls $Dados /grant "*${Eu}:(RX)" | Out-Null
+    icacls (Join-Path $Dados "postgres") /grant "*${Eu}:(OI)(CI)F" | Out-Null
     $pw = Join-Path $env:TEMP ("pw_" + [guid]::NewGuid().ToString() + ".txt")
     Set-Content -Path $pw -Value $SenhaSuper -NoNewline -Encoding ascii
     & "$PgBin\initdb.exe" -D $PgData -U postgres --pwfile=$pw -E UTF8 --auth=scram-sha-256 `
         --locale-provider=icu --icu-locale=pt-BR --locale=C
+    $codigoInitdb = $LASTEXITCODE
     Remove-Item $pw -Force
-    if ($LASTEXITCODE -ne 0) { throw "Falha ao inicializar o PostgreSQL." }
+    icacls $Dados /remove:g "*$Eu" | Out-Null
+    icacls (Join-Path $Dados "postgres") /remove:g "*$Eu" | Out-Null
+    if ($codigoInitdb -ne 0) { throw "Falha ao inicializar o PostgreSQL." }
 
     Add-Content (Join-Path $PgData "postgresql.conf") "`nlisten_addresses = '127.0.0.1'`nport = $Porta`n"
     & "$PgBin\pg_ctl.exe" register -N AdvogaFacilPostgreSQL -D $PgData -S auto

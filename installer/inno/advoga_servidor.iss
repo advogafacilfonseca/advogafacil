@@ -39,8 +39,6 @@ Name: "{group}\Como conectar os computadores"; Filename: "{commonappdata}\Advoga
 Name: "{group}\Pasta de dados do servidor"; Filename: "{commonappdata}\AdvogaFacil"
 Name: "{group}\Desinstalar Advoga Fácil Servidor"; Filename: "{uninstallexe}"
 
-[Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\configurar_servidor.ps1"" -PastaPrograma ""{app}"""; StatusMsg: "Configurando banco de dados e serviços do servidor..."; Flags: runhidden waituntilterminated
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\remover_servicos.ps1"" -PastaPrograma ""{app}"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoverServicos"
@@ -53,6 +51,25 @@ var
   Codigo: Integer;
 begin
   Exec(ExpandConstant('{sys}\net.exe'), 'stop ' + Nome + ' /y', '', SW_HIDE, ewWaitUntilTerminated, Codigo);
+end;
+
+// Configuração do banco e dos serviços. Se falhar, a pessoa é avisada (o instalador não pode
+// terminar como se estivesse tudo certo).
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Codigo: Integer;
+  Parametros: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    WizardForm.StatusLabel.Caption := 'Configurando banco de dados e serviços do servidor...';
+    Parametros := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\scripts\configurar_servidor.ps1') +
+                  '" -PastaPrograma "' + ExpandConstant('{app}') + '"';
+    if (not Exec('powershell.exe', Parametros, '', SW_HIDE, ewWaitUntilTerminated, Codigo)) or (Codigo <> 0) then
+      SuppressibleMsgBox('A configuração do servidor NÃO foi concluída (código ' + IntToStr(Codigo) + ').' + #13#10 +
+        'Nenhum dado foi apagado. Veja o registro em ' + ExpandConstant('{commonappdata}\AdvogaFacil\logs\instalacao.log') +
+        ' e execute o instalador de novo, ou procure o suporte técnico.', mbCriticalError, MB_OK, IDOK);
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
