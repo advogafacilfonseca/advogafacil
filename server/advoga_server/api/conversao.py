@@ -17,4 +17,5 @@ def usuario_publico(usuario: Usuario) -> UsuarioPublico:
         is_master=usuario.is_master,
         ativo=usuario.ativo,
         permissoes=sorted(permissoes_efetivas(usuario), key=lambda p: p.value),
+        deve_trocar_senha=usuario.deve_trocar_senha,
     )

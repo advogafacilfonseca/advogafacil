@@ -62,3 +62,21 @@ class Auditoria(Base):
     entidade_id: Mapped[str | None] = mapped_column(String(64))
     detalhes: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     ip: Mapped[str | None] = mapped_column(String(64))
+
+
+class ChaveIdempotencia(Base):
+    """Guarda a resposta de cada gravação feita com uma chave, evitando duplicidade
+    quando o aplicativo reenvia a mesma operação após uma queda de conexão."""
+
+    __tablename__ = "chaves_idempotencia"
+
+    usuario_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("usuarios.id"), primary_key=True
+    )
+    chave: Mapped[str] = mapped_column(String(64), primary_key=True)
+    rota: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[int] = mapped_column(nullable=False)
+    corpo: Mapped[Any] = mapped_column(JSONB, nullable=True)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )

@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from advoga_shared import __version__
 
-from .api import rotas_auth, rotas_sistema
+from .api import rotas_auditoria, rotas_auth, rotas_sistema, rotas_usuarios
 from .core.config import Configuracoes, obter_configuracoes
 from .core.db import configurar_banco
 
@@ -27,6 +27,10 @@ _NOMES_CAMPOS = {
     "senha_atual": "Senha atual",
     "nova_senha": "Nova senha",
     "nova_senha_confirmacao": "Confirmação da nova senha",
+    "senha_provisoria": "Senha provisória",
+    "nome_exibicao": "Nome de exibição",
+    "cargo": "Cargo",
+    "permissoes": "Permissões",
 }
 
 
@@ -69,4 +73,6 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
 
     app.include_router(rotas_sistema.rotas)
     app.include_router(rotas_auth.rotas)
+    app.include_router(rotas_usuarios.rotas)
+    app.include_router(rotas_auditoria.rotas)
     return app

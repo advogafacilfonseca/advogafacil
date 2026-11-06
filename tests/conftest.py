@@ -58,7 +58,7 @@ def banco_limpo(url_banco) -> None:
     with eng.begin() as c:
         c.execute(text("SET session_replication_role = replica"))
         c.execute(text(
-            "TRUNCATE auditoria, sessoes, permissoes_usuario, configuracoes, usuarios, "
+            "TRUNCATE chaves_idempotencia, auditoria, sessoes, permissoes_usuario, configuracoes, usuarios, "
             "identidade_servidor CASCADE"
         ))
     eng.dispose()
@@ -118,3 +118,30 @@ def token_master(cliente, master) -> str:
     r = cliente.post("/api/auth/login", json={"nome_usuario": "master", "senha": SENHA_MASTER})
     assert r.status_code == 200, r.text
     return r.json()["token"]
+
+
+def auth(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def login(cliente, nome: str, senha: str) -> str:
+    r = cliente.post("/api/auth/login", json={"nome_usuario": nome, "senha": senha})
+    assert r.status_code == 200, r.text
+    return r.json()["token"]
+
+
+def criar_usuario(cliente, token: str, nome_usuario: str, permissoes=(), senha="Provisoria2026",
+                  trocar=True, **extra) -> dict:
+    """Cria um usuário pela API (como a Master) e, se pedido, já troca a senha provisória."""
+    corpo = {"nome_completo": f"Usuário {nome_usuario}", "nome_usuario": nome_usuario,
+             "email": f"{nome_usuario}@exemplo.com", "senha_provisoria": senha,
+             "permissoes": list(permissoes)}
+    corpo.update(extra)
+    r = cliente.post("/api/usuarios", json=corpo, headers=auth(token))
+    assert r.status_code == 201, r.text
+    if trocar:
+        t = login(cliente, nome_usuario, senha)
+        r2 = cliente.post("/api/auth/trocar-senha", headers=auth(t), json={
+            "senha_atual": senha, "nova_senha": "Definitiva2026", "nova_senha_confirmacao": "Definitiva2026"})
+        assert r2.status_code == 200, r2.text
+    return r.json()

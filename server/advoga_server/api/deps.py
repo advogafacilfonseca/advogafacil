@@ -21,6 +21,9 @@ def obter_cfg() -> Configuracoes:
     return obter_configuracoes()
 
 
+ROTAS_LIVRES_SENHA_PROVISORIA = {"/api/auth/eu", "/api/auth/trocar-senha", "/api/auth/logout"}
+
+
 def ip_cliente(request: Request) -> str | None:
     return request.client.host if request.client else None
 
@@ -49,6 +52,11 @@ def usuario_atual(
         sessao, usuario = validar_sessao(db, token, cfg)
     except ErroAutenticacao as exc:
         raise HTTPException(exc.status, exc.mensagem) from exc
+    if usuario.deve_trocar_senha and request.url.path not in ROTAS_LIVRES_SENHA_PROVISORIA:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Você está usando uma senha provisória. Troque a senha para continuar.",
+        )
     return Contexto(usuario, sessao, permissoes_efetivas(usuario), ip_cliente(request))
 
 

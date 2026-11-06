@@ -115,6 +115,7 @@ class UsuarioPublico(BaseModel):
     is_master: bool
     ativo: bool
     permissoes: list[Permissao]
+    deve_trocar_senha: bool = False
 
 
 class SessaoCriada(BaseModel):
@@ -125,3 +126,87 @@ class SessaoCriada(BaseModel):
 
 class Mensagem(BaseModel):
     mensagem: str
+
+
+# ----------------------------------------------------------------- usuários
+
+
+def _limpar(v: str | None) -> str | None:
+    if v is None:
+        return None
+    v = " ".join(v.split())
+    return v or None
+
+
+class UsuarioCriar(BaseModel):
+    nome_completo: str = Field(min_length=3, max_length=150)
+    nome_exibicao: str | None = Field(default=None, max_length=80)
+    cargo: str | None = Field(default=None, max_length=80)
+    nome_usuario: str
+    email: EmailStr
+    senha_provisoria: str
+    permissoes: list[Permissao] = Field(default_factory=list)
+
+    _nomes = field_validator("nome_completo", "nome_exibicao", "cargo")(classmethod(lambda cls, v: _limpar(v)))
+
+    @field_validator("nome_usuario")
+    @classmethod
+    def _usuario(cls, v: str) -> str:
+        return normalizar_nome_usuario(v)
+
+    @field_validator("senha_provisoria")
+    @classmethod
+    def _senha(cls, v: str) -> str:
+        return validar_forca_senha(v)
+
+
+class UsuarioAtualizar(BaseModel):
+    nome_completo: str | None = Field(default=None, min_length=3, max_length=150)
+    nome_exibicao: str | None = Field(default=None, min_length=1, max_length=80)
+    cargo: str | None = Field(default=None, max_length=80)
+    email: EmailStr | None = None
+
+    _nomes = field_validator("nome_completo", "nome_exibicao", "cargo")(classmethod(lambda cls, v: _limpar(v)))
+
+
+class PermissoesDefinir(BaseModel):
+    permissoes: list[Permissao]
+
+
+class RedefinirSenha(BaseModel):
+    senha_provisoria: str
+
+    @field_validator("senha_provisoria")
+    @classmethod
+    def _senha(cls, v: str) -> str:
+        return validar_forca_senha(v)
+
+
+class UsuarioDetalhe(UsuarioPublico):
+    deve_trocar_senha: bool
+    criado_em: datetime
+    ultimo_login_em: datetime | None
+    desativado_em: datetime | None
+    sessoes_ativas: int
+
+
+# ---------------------------------------------------------------- auditoria
+
+
+class ItemAuditoria(BaseModel):
+    id: int
+    ocorrido_em: datetime
+    usuario_id: uuid.UUID | None
+    usuario_nome: str | None
+    acao: str
+    entidade: str | None
+    entidade_id: str | None
+    detalhes: dict | None
+    ip: str | None
+
+
+class PaginaAuditoria(BaseModel):
+    itens: list[ItemAuditoria]
+    total: int
+    pagina: int
+    por_pagina: int
