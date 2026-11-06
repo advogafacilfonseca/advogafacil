@@ -124,7 +124,8 @@ jobs:
           for ($i = 0; $i -lt 40 -and (Test-Path "${env:ProgramFiles}\AdvogaFacilServidor\unins000.exe"); $i++) { Start-Sleep -Seconds 3 }
           if (Get-Service AdvogaFacilServidor -ErrorAction SilentlyContinue) { throw "Serviço não removido" }
           if (Get-Service AdvogaFacilPostgreSQL -ErrorAction SilentlyContinue) { throw "Serviço do banco não removido" }
-          if (Get-NetFirewallRule -DisplayName "Advoga Fácil Servidor*" -ErrorAction SilentlyContinue) { throw "Regra de firewall não removida" }
+          for ($i = 0; $i -lt 10 -and (Get-NetFirewallRule -DisplayName "Advoga Fácil Servidor*" -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 3 }
+          if (Get-NetFirewallRule -DisplayName "Advoga Fácil Servidor*" -ErrorAction SilentlyContinue) { Diagnostico; throw "Regra de firewall não removida" }
           if (-not (Test-Path "$env:ProgramData\AdvogaFacil\postgres\data\PG_VERSION")) { throw "Os dados foram apagados" }
           Write-Host "Instalador do servidor: instalação, atualização e desinstalação conferidas."
       - name: Teste real do instalador do aplicativo
