@@ -12,7 +12,18 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from advoga_shared.esquemas import PaginaAuditoria, Saude, SessaoCriada, UsuarioDetalhe, UsuarioPublico
+from advoga_shared.esquemas import (
+    Cliente,
+    ItemAuditoria,
+    OpcaoUsuario,
+    PaginaAuditoria,
+    PaginaClientes,
+    PaginaPesquisa,
+    Saude,
+    SessaoCriada,
+    UsuarioDetalhe,
+    UsuarioPublico,
+)
 
 
 class ErroAPI(Exception):
@@ -198,3 +209,42 @@ class ClienteAPI:
     def auditoria(self, **filtros: Any) -> PaginaAuditoria:
         params = {k: v for k, v in filtros.items() if v not in (None, "")}
         return PaginaAuditoria.model_validate(self._requisitar("GET", "/api/auditoria", params=params))
+
+    # -------------------------------------------------------------- clientes
+    def listar_clientes(self, q: str = "", situacao: str | None = None, pagina: int = 1,
+                        por_pagina: int = 50) -> PaginaClientes:
+        params: dict[str, Any] = {"pagina": pagina, "por_pagina": por_pagina}
+        if q.strip():
+            params["q"] = q.strip()
+        if situacao:
+            params["situacao"] = situacao
+        return PaginaClientes.model_validate(self._requisitar("GET", "/api/clientes", params=params))
+
+    def obter_cliente(self, cliente_id: str) -> Cliente:
+        return Cliente.model_validate(self._requisitar("GET", f"/api/clientes/{cliente_id}"))
+
+    def criar_cliente(self, dados: dict[str, Any]) -> Cliente:
+        return Cliente.model_validate(self._requisitar("POST", "/api/clientes", gravacao=True, json=dados))
+
+    def atualizar_cliente(self, cliente_id: str, dados: dict[str, Any]) -> Cliente:
+        return Cliente.model_validate(
+            self._requisitar("PATCH", f"/api/clientes/{cliente_id}", gravacao=True, json=dados))
+
+    def encerrar_cliente(self, cliente_id: str, motivo: str, versao: int) -> Cliente:
+        return Cliente.model_validate(self._requisitar(
+            "POST", f"/api/clientes/{cliente_id}/encerrar", gravacao=True, json={"motivo": motivo, "versao": versao}))
+
+    def reativar_cliente(self, cliente_id: str, versao: int) -> Cliente:
+        return Cliente.model_validate(self._requisitar(
+            "POST", f"/api/clientes/{cliente_id}/reativar", gravacao=True, params={"versao": versao}))
+
+    def historico_cliente(self, cliente_id: str) -> list[ItemAuditoria]:
+        return [ItemAuditoria.model_validate(i)
+                for i in self._requisitar("GET", f"/api/clientes/{cliente_id}/historico")]
+
+    def pesquisar(self, termo: str, pagina: int = 1, por_pagina: int = 20) -> PaginaPesquisa:
+        return PaginaPesquisa.model_validate(self._requisitar(
+            "GET", "/api/pesquisa", params={"q": termo, "pagina": pagina, "por_pagina": por_pagina}))
+
+    def usuarios_ativos(self) -> list[OpcaoUsuario]:
+        return [OpcaoUsuario.model_validate(u) for u in self._requisitar("GET", "/api/usuarios-ativos")]

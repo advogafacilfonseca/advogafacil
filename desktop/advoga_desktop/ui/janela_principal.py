@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QMessageBox,
     QMainWindow,
     QMenu,
     QPushButton,
@@ -28,6 +30,7 @@ from .componentes.basicos import rotulo
 from advoga_shared.permissoes import Permissao
 
 from .telas.auditoria import TelaAuditoria
+from .telas.clientes import FichaCliente, TelaClientes, TelaResultadosPesquisa
 from .telas.painel import TelaPainel
 from .telas.usuarios import TelaUsuarios
 from .telas.trocar_senha import DialogoTrocarSenha
@@ -97,6 +100,16 @@ class JanelaPrincipal(QMainWindow):
         lc.addWidget(logo)
         lc.addWidget(nome)
         lc.addStretch()
+        # Pesquisa global: a partir de 3 caracteres, sem diferenciar acentos e maiúsculas.
+        self.pesquisa = QLineEdit()
+        self.pesquisa.setObjectName("pesquisaGlobal")
+        self.pesquisa.setPlaceholderText("Pesquisar clientes por nome, CPF ou telefone...")
+        self.pesquisa.setClearButtonEnabled(True)
+        self.pesquisa.setMinimumWidth(420)
+        self.pesquisa.setMinimumHeight(36)
+        self.pesquisa.setMaxLength(100)
+        lc.addWidget(self.pesquisa)
+        lc.addSpacing(16)
         self.btn_usuario = QPushButton(f"{usuario.nome_exibicao}  ·  {usuario.cargo or ''}".strip(" ·"))
         menu = QMenu(self)
         menu.addAction("Alterar minha senha", self._trocar_senha)
@@ -120,12 +133,27 @@ class JanelaPrincipal(QMainWindow):
         self.grupo.setExclusive(True)
 
         self._adicionar_secao(ll, "Painel inicial", TelaPainel(api))
+        self.tela_clientes: TelaClientes | None = None
+        if Permissao.CLIENTES in usuario.permissoes:
+            self.tela_clientes = TelaClientes(api)
+            self._adicionar_secao(ll, "Clientes", self.tela_clientes)
         if Permissao.ADMIN_USUARIOS in usuario.permissoes:
             self._adicionar_secao(ll, "Usuários e Permissões", TelaUsuarios(api))
         if usuario.is_master:
             self._adicionar_secao(ll, "Auditoria", TelaAuditoria(api))
         ll.addStretch()
         ll.addWidget(rotulo(f"  Versão {self._versao()}", "rotuloCampo"))
+
+        # Resultados da pesquisa global (página fora do menu)
+        self.tela_resultados = TelaResultadosPesquisa(api)
+        self.indice_resultados = self.paginas.addWidget(self.tela_resultados)
+        self.tela_resultados.abrir.connect(self.abrir_registro)
+        self._atraso_pesquisa = QTimer(self)
+        self._atraso_pesquisa.setSingleShot(True)
+        self._atraso_pesquisa.setInterval(400)
+        self._atraso_pesquisa.timeout.connect(self._pesquisar)
+        self.pesquisa.textChanged.connect(self._ao_digitar_pesquisa)
+        self.pesquisa.returnPressed.connect(self._pesquisar)
 
         corpo.addWidget(lateral)
         corpo.addWidget(self.paginas, 1)
@@ -159,6 +187,43 @@ class JanelaPrincipal(QMainWindow):
         if indice == 0:
             botao.setChecked(True)
 
+    def _ao_digitar_pesquisa(self, texto: str) -> None:
+        if len(texto.strip()) >= 3:
+            self._atraso_pesquisa.start()
+        else:
+            self._atraso_pesquisa.stop()
+
+    def _pesquisar(self) -> None:
+        termo = " ".join(self.pesquisa.text().split())
+        if len(termo) < 3:
+            self.statusBar().showMessage("Digite pelo menos 3 caracteres para pesquisar.", 4000)
+            return
+        self._atraso_pesquisa.stop()
+        self.tela_resultados.pesquisar(termo)
+        botao = self.grupo.checkedButton()
+        if botao:  # nenhum item do menu fica marcado enquanto os resultados estão na tela
+            self.grupo.setExclusive(False)
+            botao.setChecked(False)
+            self.grupo.setExclusive(True)
+        self.paginas.setCurrentIndex(self.indice_resultados)
+
+    def abrir_registro(self, tipo: str, ident: str) -> None:
+        if tipo == "cliente":
+            try:
+                ficha = FichaCliente(self.api, ident, self)
+            except SessaoExpirada as exc:
+                self._saindo = True
+                self.sessao_encerrada.emit(exc.mensagem)
+                return
+            except ErroAPI as exc:
+                QMessageBox.warning(self, "Ficha do cliente", exc.mensagem)
+                return
+            if self.tela_clientes:
+                ficha.alterado.connect(lambda: self.tela_clientes.carregar(self.tela_clientes.pagina))
+            ficha.alterado.connect(lambda: self.tela_resultados.pesquisar(
+                self.tela_resultados.termo, self.tela_resultados.pagina))
+            ficha.exec()
+
     def _checar_servidor(self) -> None:
         QThreadPool.globalInstance().start(
             _VerificarSaude(self.api.endereco, self.api.certificado_pem, self._sinais))
@@ -188,7 +253,7 @@ class JanelaPrincipal(QMainWindow):
         if not self._saindo:
             try:
                 self.api.logout()
-            except ErroAPI:
+            except Exception:  # noqa: BLE001 - fechar a janela nunca pode falhar
                 pass
             QApplication.quit()
         super().closeEvent(evento)

@@ -82,6 +82,12 @@ QCheckBox::indicator:checked {{ background: {dourado}; border-color: {dourado_cl
 QCheckBox:disabled {{ color: {texto_suave}; }}
 QScrollArea {{ border: none; }}
 QSplitter::handle {{ background: {fundo}; width: 12px; }}
+QTabWidget::pane {{ border: 1px solid {borda}; border-radius: 6px; top: -1px; background: {superficie}; }}
+QTabBar::tab {{ background: {grafite}; color: {texto_suave}; padding: 8px 18px; border: 1px solid {borda};
+    border-bottom: none; border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 2px; }}
+QTabBar::tab:selected {{ background: {superficie}; color: {dourado_claro}; }}
+QLineEdit#pesquisaGlobal {{ border: 1px solid {dourado_escuro}; border-radius: 18px; padding: 6px 14px; }}
+QLabel#etiquetaEncerrado {{ color: {aviso}; font-weight: 600; }}
 QMenu {{ background: {superficie}; border: 1px solid {borda}; }}
 QMenu::item {{ padding: 7px 22px; }}
 QMenu::item:selected {{ background: {grafite_claro}; color: {dourado_claro}; }}
