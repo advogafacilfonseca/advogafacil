@@ -10,7 +10,7 @@ Este manual explica como instalar o Advoga Fácil no escritório: o **servidor**
 | **Advoga Fácil** (aplicativo) | Em todos os computadores, inclusive no servidor | Tela do sistema. Não guarda dados do escritório |
 | **Tailscale** | No servidor e nos computadores que acessam de fora do escritório | Rede privada e criptografada entre os computadores do escritório |
 
-Onde ficam os dados no servidor: `C:\ProgramData\AdvogaFacil` (banco, documentos, configuração e registros). O programa fica em `C:\Program Files\Advoga Fácil Servidor`. Desinstalar o programa **não** apaga os dados.
+Onde ficam os dados no servidor: `C:\ProgramData\AdvogaFacil` (banco, documentos, configuração e registros). O programa fica em `C:\Program Files\AdvogaFacilServidor`. Desinstalar o programa **não** apaga os dados.
 
 **Requisitos:** Windows 10 ou 11 de 64 bits, conta de administrador para instalar, e pelo menos 10 GB livres no servidor (mais o tamanho dos documentos). Recomendado: um HD externo para os backups.
 
@@ -77,7 +77,7 @@ A Tailscale cria uma rede privada e criptografada só entre os computadores do e
 3. No painel `login.tailscale.com/admin/machines`, abra o servidor, clique em **...** e escolha **Disable key expiry**. Assim o servidor não sai da rede a cada 180 dias.
 4. Atualize o arquivo de conexão: no servidor, abra o **Prompt de Comando como administrador** e rode:
    ```
-   "C:\Program Files\Advoga Fácil Servidor\servidor\AdvogaFacilServidor.exe" informacoes
+   "C:\Program Files\AdvogaFacilServidor\servidor\AdvogaFacilServidor.exe" informacoes
    ```
    O atalho **Como conectar os computadores** passa a mostrar o nome do servidor na Tailscale (ex.: `notebook-master.tail1234.ts.net`).
 5. **Em cada computador que acessa de fora:** instale a Tailscale e entre com a mesma conta. No Advoga Fácil, use o endereço da Tailscale do servidor. Ele funciona dentro e fora do escritório.

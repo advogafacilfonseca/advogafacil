@@ -65,7 +65,7 @@ Restaure o sistema num computador novo (ou no mesmo, depois de formatado):
    ```
 3. Ligue o HD externo e rode a restauração. O caminho do programa pode variar:
    ```
-   "C:\Program Files\Advoga Fácil Servidor\servidor\AdvogaFacilServidor.exe" restaurar --origem "E:\Backups"
+   "C:\Program Files\AdvogaFacilServidor\servidor\AdvogaFacilServidor.exe" restaurar --origem "E:\Backups"
    ```
    O sistema usa a **versão mais recente**. Para escolher outra versão, informe a pasta dela, por exemplo `--origem "E:\Backups\AdvogaFacil-Backups\versoes\2026-11-06_230000_completo"`.
 

@@ -43,7 +43,7 @@ Se a exportação falhar (por exemplo, um documento danificado no servidor), nad
 **Alternativa pela linha de comando** (Prompt de Comando como administrador, no computador novo):
 
 ```
-"C:\Program Files\Advoga Fácil Servidor\servidor\AdvogaFacilServidor.exe" importar-migracao --pacote "E:\Migracao\AdvogaFacil_Migracao_2026-11-06_200000.afmig"
+"C:\Program Files\AdvogaFacilServidor\servidor\AdvogaFacilServidor.exe" importar-migracao --pacote "E:\Migracao\AdvogaFacil_Migracao_2026-11-06_200000.afmig"
 ```
 
 ## Passo 3: concluir no servidor antigo

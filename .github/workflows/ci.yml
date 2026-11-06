@@ -119,9 +119,9 @@ jobs:
           if ($s.servidor_id -ne $id1) { throw "A atualização trocou a identidade do servidor" }
           if (-not (Get-ChildItem "$env:ProgramData\AdvogaFacil\atualizacoes\antes-da-atualizacao_*.dump")) { throw "Sem cópia antes da atualização" }
           # 3) Desinstalação: remove serviços e regras, preserva os dados
-          & "${env:ProgramFiles}\Advoga Fácil Servidor\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART | Out-Null
+          & "${env:ProgramFiles}\AdvogaFacilServidor\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART | Out-Null
           # O desinstalador do Inno se copia para a pasta temporária e continua em segundo plano
-          for ($i = 0; $i -lt 40 -and (Test-Path "${env:ProgramFiles}\Advoga Fácil Servidor\unins000.exe"); $i++) { Start-Sleep -Seconds 3 }
+          for ($i = 0; $i -lt 40 -and (Test-Path "${env:ProgramFiles}\AdvogaFacilServidor\unins000.exe"); $i++) { Start-Sleep -Seconds 3 }
           if (Get-Service AdvogaFacilServidor -ErrorAction SilentlyContinue) { throw "Serviço não removido" }
           if (Get-Service AdvogaFacilPostgreSQL -ErrorAction SilentlyContinue) { throw "Serviço do banco não removido" }
           if (Get-NetFirewallRule -DisplayName "Advoga Fácil Servidor*" -ErrorAction SilentlyContinue) { throw "Regra de firewall não removida" }

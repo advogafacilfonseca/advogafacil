@@ -8,7 +8,9 @@ AppId={{46C88E3C-024C-454A-9B61-1619169CBBF7}
 AppName=Advoga Fácil Servidor
 AppVersion={#Versao}
 AppPublisher=Advoga Fácil
-DefaultDirName={autopf}\Advoga Fácil Servidor
+; Caminho sem acentos: o PostgreSQL não inicializa em pastas com acentos no Windows.
+DefaultDirName={autopf}\AdvogaFacilServidor
+DisableDirPage=yes
 DefaultGroupName=Advoga Fácil Servidor
 UninstallDisplayIcon={app}\servidor\AdvogaFacilServidor.exe
 SetupIconFile=..\icones\advoga_facil.ico
