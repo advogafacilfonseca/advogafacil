@@ -18,6 +18,7 @@ from .api import (
     rotas_auth,
     rotas_clientes,
     rotas_documentos,
+    rotas_email,
     rotas_financeiro,
     rotas_notificacoes,
     rotas_processos,
@@ -124,7 +125,7 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
         if cfg.servico_avisos:
             from .services.servico_avisos import ServicoAvisos
 
-            servico = ServicoAvisos(cfg.avisos_intervalo_segundos)
+            servico = ServicoAvisos(cfg.avisos_intervalo_segundos, cfg)
             servico.iniciar()
         try:
             yield
@@ -159,4 +160,5 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
     app.include_router(rotas_financeiro.rotas)
     app.include_router(rotas_agenda.rotas)
     app.include_router(rotas_notificacoes.rotas)
+    app.include_router(rotas_email.rotas)
     return app

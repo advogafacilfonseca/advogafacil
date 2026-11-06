@@ -25,7 +25,8 @@ from advoga_shared.permissoes import Permissao
 from ..models import Notificacao as NotificacaoModelo
 from ..services import notificacoes as svc
 from ..services.agenda import agora
-from .deps import Contexto, exige_master, obter_db, usuario_atual
+from ..core.config import Configuracoes
+from .deps import Contexto, exige_master, obter_cfg, obter_db, usuario_atual
 from .idempotencia import executar_gravacao
 
 rotas = APIRouter(prefix="/api/notificacoes", tags=["notificacoes"])
@@ -91,9 +92,10 @@ def reenviar(notificacao_id: uuid.UUID, request: Request, ctx: Contexto = Depend
 
 
 @rotas.post("/verificar-agora", response_model=ResultadoCiclo)
-def verificar_agora(ctx: Contexto = Depends(exige_master), db: Session = Depends(obter_db)) -> ResultadoCiclo:
+def verificar_agora(ctx: Contexto = Depends(exige_master), db: Session = Depends(obter_db),
+                    cfg: Configuracoes = Depends(obter_cfg)) -> ResultadoCiclo:
     """Roda o ciclo do serviço de avisos imediatamente (o serviço também roda sozinho)."""
-    r = svc.executar_ciclo(db)
+    r = svc.executar_ciclo(db, cfg=cfg)
     if r is None:
         raise HTTPException(409, "A verificação de avisos já está em andamento. Tente de novo em instantes.")
     return r

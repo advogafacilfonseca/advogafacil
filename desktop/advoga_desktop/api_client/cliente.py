@@ -17,6 +17,8 @@ from urllib.parse import urlsplit
 import httpx
 
 from advoga_shared.esquemas import (
+    AutorizacaoGoogle,
+    EstadoEmail,
     ConfiguracaoNotificacoes,
     Notificacao,
     PaginaNotificacoes,
@@ -575,6 +577,24 @@ class ClienteAPI:
 
     def verificar_avisos_agora(self) -> ResultadoCiclo:
         return ResultadoCiclo.model_validate(self._requisitar("POST", "/api/notificacoes/verificar-agora"))
+
+    # ------------------------------------------------------------------- conta de envio
+    def estado_email(self) -> EstadoEmail:
+        return EstadoEmail.model_validate(self._requisitar("GET", "/api/email/estado"))
+
+    def email_google_iniciar(self, client_id: str, client_secret: str, redirect_uri: str) -> AutorizacaoGoogle:
+        return AutorizacaoGoogle.model_validate(self._requisitar("POST", "/api/email/google/iniciar", json={
+            "client_id": client_id, "client_secret": client_secret, "redirect_uri": redirect_uri}))
+
+    def email_google_concluir(self, state: str, code: str) -> EstadoEmail:
+        return EstadoEmail.model_validate(self._requisitar("POST", "/api/email/google/concluir",
+                                                           json={"state": state, "code": code}))
+
+    def testar_email(self, para: str | None = None) -> str:
+        return self._requisitar("POST", "/api/email/testar", json={"para": para})["enviado_para"]
+
+    def desconectar_email(self) -> EstadoEmail:
+        return EstadoEmail.model_validate(self._requisitar("POST", "/api/email/desconectar"))
 
     def enviar_comprovante(self, arquivo: Path) -> Comprovante:
         arquivo = Path(arquivo)

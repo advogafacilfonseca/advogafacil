@@ -1137,3 +1137,33 @@ class ResultadoCiclo(BaseModel):
     enviadas: int
     falhas: int
     nao_enviadas: int
+
+
+class EstadoEmail(BaseModel):
+    configurado: bool
+    tipo: str | None = None          # google
+    remetente: str | None = None
+    conectado_em: datetime | None = None
+    conectado_por_nome: str | None = None
+    precisa_reconectar: bool = False
+    mensagem: str
+
+
+class IniciarGoogle(BaseModel):
+    client_id: str = Field(min_length=10, max_length=300)
+    client_secret: str = Field(min_length=5, max_length=300)
+    redirect_uri: str = Field(pattern=r"^http://(127\.0\.0\.1|localhost):\d{2,5}/?[\w/-]*$", max_length=200)
+
+
+class AutorizacaoGoogle(BaseModel):
+    url: str
+    state: str
+
+
+class ConcluirGoogle(BaseModel):
+    state: str = Field(min_length=10, max_length=200)
+    code: str = Field(min_length=5, max_length=2000)
+
+
+class TesteEmail(BaseModel):
+    para: EmailStr | None = None  # padrão: e-mail da própria Master

@@ -280,7 +280,7 @@ def enviar_pendentes(db: Session, enviador: Enviador | None, agora: datetime, li
 
 
 def executar_ciclo(db: Session, enviador: Enviador | None = None, agora: datetime | None = None,
-                   usar_configurado: bool = True) -> ResultadoCiclo | None:
+                   usar_configurado: bool = True, cfg=None) -> ResultadoCiclo | None:
     """Um ciclo do serviço: gera avisos novos e envia os pendentes. None se outro ciclo está rodando."""
     from .agenda import agora as agora_local
 
@@ -291,7 +291,9 @@ def executar_ciclo(db: Session, enviador: Enviador | None = None, agora: datetim
         geradas = gerar(db, agora)
         db.commit()
         if enviador is None and usar_configurado:
-            enviador = obter_enviador(db)
+            from ..core.config import obter_configuracoes
+
+            enviador = obter_enviador(db, cfg or obter_configuracoes())
         r = enviar_pendentes(db, enviador, agora)
         r.geradas = geradas
         return r

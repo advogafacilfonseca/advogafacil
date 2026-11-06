@@ -16,7 +16,8 @@ log = logging.getLogger("advoga.servico_avisos")
 
 
 class ServicoAvisos:
-    def __init__(self, intervalo_segundos: int) -> None:
+    def __init__(self, intervalo_segundos: int, cfg=None) -> None:
+        self.cfg = cfg
         self.intervalo = max(30, intervalo_segundos)
         self._parar = threading.Event()
         self._thread: threading.Thread | None = None
@@ -42,14 +43,13 @@ class ServicoAvisos:
             self.executar_uma_vez()
             self._parar.wait(self.intervalo)
 
-    @staticmethod
-    def executar_uma_vez() -> None:
+    def executar_uma_vez(self) -> None:
         from . import notificacoes
 
         gerador = obter_sessao()
         db = next(gerador)
         try:
-            r = notificacoes.executar_ciclo(db)
+            r = notificacoes.executar_ciclo(db, cfg=self.cfg)
             if r and (r.geradas or r.enviadas or r.falhas):
                 log.info("Avisos: %s gerados, %s e-mails enviados, %s falhas.", r.geradas, r.enviadas, r.falhas)
         except Exception:  # noqa: BLE001 - o serviço não pode parar por um erro pontual

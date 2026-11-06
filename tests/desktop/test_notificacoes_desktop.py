@@ -77,7 +77,7 @@ def test_configurar_destinatarios_e_historico(qtbot, tema, api, equipe, db, sem_
     api.criar_compromisso({"titulo": "Audiência de instrução", "tipo": "audiencia", "inicio": em(1, 14),
                            "local": "Fórum Criminal"})
     svc.executar_ciclo(db, None, MEIO_DIA, usar_configurado=False)
-    tela.abas.setCurrentIndex(1)
+    tela.abas.setCurrentIndex(2)
     tela.carregar_historico()
     assert tela.tabela_hist.rowCount() == 2
     assert {tela.tabela_hist.item(i, 1).text() for i in range(2)} == {"Usuário ana", "Usuário bia"}
@@ -123,3 +123,47 @@ def test_botao_de_avisos_e_painel(qtbot, tema, api, servidor, equipe, db, monkey
     janela.close()
     outro.fechar()
     assert datetime.now(UTC)
+
+
+def test_conectar_conta_google_pela_tela(qtbot, tema, api, monkeypatch, sem_caixas):
+    import httpx
+    from PySide6.QtGui import QDesktopServices
+    from urllib.parse import parse_qs, urlparse
+
+    from advoga_server.services import email_google
+    from tests.servidor.test_email_google import GoogleFalso
+
+    import tests.servidor.test_email_google as modulo_teste
+    google = GoogleFalso()
+    monkeypatch.setattr(email_google, "transporte", httpx.MockTransport(google))
+    email_google._tokens.clear()
+    tela = TelaNotificacoes(api)
+    qtbot.addWidget(tela)
+    tela.resize(1200, 720)
+    tela.carregar()
+    tela.abas.setCurrentIndex(1)
+    assert "Nenhuma conta" in tela.estado_email.text() and not tela.btn_testar.isEnabled()
+    tela.conectar_google()
+    assert "Informe o ID" in tela.msg_email.text()
+    tela.client_id.setText("1234567890-abc.apps.googleusercontent.com")
+    tela.client_secret.setText("segredo-do-cliente")
+
+    def navegador(url):
+        q = parse_qs(urlparse(url.toString()).query)
+        redirect = q["redirect_uri"][0]
+        monkeypatch.setattr(modulo_teste, "REDIRECT", redirect)
+        with httpx.Client(trust_env=False) as h:  # o "navegador" volta para o aplicativo com o código
+            r = h.get(redirect, params={"code": "abcdef", "state": q["state"][0]})
+        assert "Conta conectada" in r.text
+        return True
+
+    monkeypatch.setattr(QDesktopServices, "openUrl", navegador)
+    tela.conectar_google()
+    assert not tela.btn_conectar.isEnabled()
+    tela._verificar_retorno()
+    assert "conectada" in tela.msg_email.text(), tela.msg_email.text()
+    assert "notificacoes@escritorio-teste.com.br" in tela.estado_email.text()
+    assert tela.btn_testar.isEnabled() and tela.btn_conectar.isEnabled() and tela.client_secret.text() == ""
+    _captura(tela, "43_conta_de_envio")
+    tela.testar_email()
+    assert "E-mail de teste enviado" in tela.msg_email.text() and len(google.enviados) == 1

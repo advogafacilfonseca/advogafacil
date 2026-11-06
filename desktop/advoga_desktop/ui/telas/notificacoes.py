@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -178,6 +178,38 @@ class TelaNotificacoes(QWidget):
         la.addWidget(self.erro)
         self.abas.addTab(aba, "Quem recebe")
 
+        # -------- Conta de envio
+        aba = QWidget()
+        lc = QVBoxLayout(aba)
+        lc.setContentsMargins(16, 14, 16, 14)
+        lc.addWidget(rotulo("Conta oficial de envio", "secao"))
+        self.estado_email = rotulo("", quebra=True)
+        lc.addWidget(self.estado_email)
+        lc.addWidget(rotulo(
+            "Os avisos saem de um único endereço do escritório (Gmail ou Google Workspace). A autorização é feita "
+            "na tela do próprio Google: o Advoga Fácil nunca vê a senha da conta e só recebe permissão para ENVIAR "
+            "e-mails (não lê a caixa de entrada). Antes, crie o identificador do aplicativo no Google Cloud, seguindo "
+            "o manual \"Configurar o envio pelo Google\" (docs/manuais/configurar-envio-google.md).",
+            "rotuloCampo", True))
+        self.client_id = campo("Ex.: 1234567890-abc123.apps.googleusercontent.com", maximo=300)
+        self.client_secret = campo("Chave secreta do cliente", senha=True, maximo=300)
+        lc.addWidget(bloco_campo("ID do cliente OAuth (Google Cloud)", self.client_id))
+        lc.addWidget(bloco_campo("Chave secreta do cliente", self.client_secret))
+        bc = QHBoxLayout()
+        self.btn_conectar = QPushButton("Conectar conta Google")
+        self.btn_conectar.setObjectName("primario")
+        self.btn_testar = QPushButton("Enviar e-mail de teste")
+        self.btn_desconectar = QPushButton("Desconectar")
+        bc.addWidget(self.btn_conectar)
+        bc.addWidget(self.btn_testar)
+        bc.addStretch()
+        bc.addWidget(self.btn_desconectar)
+        lc.addLayout(bc)
+        self.msg_email = rotulo("", "rotuloCampo", True)
+        lc.addWidget(self.msg_email)
+        lc.addStretch()
+        self.abas.addTab(aba, "Conta de envio")
+
         # -------- Histórico
         aba = QWidget()
         lh = QVBoxLayout(aba)
@@ -219,7 +251,15 @@ class TelaNotificacoes(QWidget):
         self.f_categoria.currentIndexChanged.connect(lambda _i: self.carregar_historico())
         self.f_situacao.currentIndexChanged.connect(lambda _i: self.carregar_historico())
         self.btn_reenviar.clicked.connect(self.reenviar)
-        self.abas.currentChanged.connect(lambda i: self.carregar_historico() if i == 1 else None)
+        self.btn_conectar.clicked.connect(self.conectar_google)
+        self.btn_testar.clicked.connect(self.testar_email)
+        self.btn_desconectar.clicked.connect(self.desconectar_email)
+        self.abas.currentChanged.connect(lambda i: self.carregar_historico() if i == 2 else None)
+        self._receptor = None
+        self._autorizacao = None
+        self._espera = QTimer(self)
+        self._espera.setInterval(300)
+        self._espera.timeout.connect(self._verificar_retorno)
         self._carregado = False
 
     def showEvent(self, evento) -> None:  # noqa: N802
@@ -278,9 +318,113 @@ class TelaNotificacoes(QWidget):
         self.grade.verticalHeader().setMinimumWidth(300)
         self.chk_email.setChecked(c.email_ativo)
         self.hora.setText(c.hora_inicio)
-        self.envio.setText("Conta oficial de envio de e-mails: ainda não configurada. Enquanto isso, os avisos "
-                           "aparecem no aplicativo e o histórico registra \"serviço de envio não configurado\".")
         self.erro.setText("")
+        self.carregar_estado_email()
+
+    # ------------------------------------------------------------- conta de envio
+    def carregar_estado_email(self) -> None:
+        try:
+            e = self.api.estado_email()
+        except ErroAPI as exc:
+            self.estado_email.setText(exc.mensagem)
+            return
+        cor = CORES["sucesso"] if e.configurado and not e.precisa_reconectar else CORES["aviso"]
+        texto = e.mensagem
+        if e.configurado and e.conectado_em:
+            texto += f"\nConectada em {data_hora_br(e.conectado_em)}" + (
+                f" por {e.conectado_por_nome}." if e.conectado_por_nome else ".")
+        self.estado_email.setText(texto)
+        self.estado_email.setStyleSheet(f"color:{cor};")
+        ok = e.configurado and not e.precisa_reconectar
+        self.btn_testar.setEnabled(ok)
+        self.btn_desconectar.setEnabled(e.configurado)
+        self.btn_conectar.setText("Conectar de novo" if e.configurado else "Conectar conta Google")
+        self.envio.setText(f"Conta de envio: {e.remetente}" if ok else
+                           "Conta oficial de envio: não conectada (aba \"Conta de envio\"). Enquanto isso, os avisos "
+                           "aparecem no aplicativo e o histórico registra \"serviço de envio não configurado\".")
+
+    def conectar_google(self) -> None:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        from ..componentes.oauth_local import ReceptorOAuth
+
+        cid, segredo = self.client_id.text().strip(), self.client_secret.text().strip()
+        if not cid or not segredo:
+            self.msg_email.setText("Informe o ID do cliente e a chave secreta criados no Google Cloud.")
+            return
+        self._cancelar_espera()
+        self._receptor = ReceptorOAuth()
+        try:
+            self._autorizacao = self.api.email_google_iniciar(cid, segredo, self._receptor.endereco)
+        except ErroAPI as exc:
+            self._cancelar_espera()
+            self.msg_email.setText(exc.mensagem)
+            return
+        self._receptor.iniciar()
+        self._prazo = 300 * 1000 // self._espera.interval()  # até 5 minutos
+        self._espera.start()
+        self.btn_conectar.setEnabled(False)
+        self.msg_email.setText("Abrimos a página do Google no navegador. Entre com a conta oficial do escritório e "
+                               "autorize o envio de e-mails. Esta tela atualiza sozinha ao terminar.")
+        QDesktopServices.openUrl(QUrl(self._autorizacao.url))
+
+    def _verificar_retorno(self) -> None:
+        self._prazo -= 1
+        r = self._receptor.resultado if self._receptor else None
+        if r is None and self._prazo > 0:
+            return
+        auth = self._autorizacao
+        self._cancelar_espera()
+        if r is None:
+            self.msg_email.setText("Tempo esgotado. Clique em \"Conectar conta Google\" para tentar de novo.")
+            return
+        if "error" in r or r.get("state") != auth.state:
+            self.msg_email.setText("A autorização foi cancelada ou não confere. Tente de novo.")
+            return
+        try:
+            with cursor_espera():
+                e = self.api.email_google_concluir(auth.state, r["code"])
+        except ErroAPI as exc:
+            self.msg_email.setText(exc.mensagem)
+            return
+        self.client_secret.clear()
+        self.msg_email.setText(f"Conta {e.remetente} conectada. Use \"Enviar e-mail de teste\" para confirmar.")
+        self.carregar_estado_email()
+
+    def _cancelar_espera(self) -> None:
+        self._espera.stop()
+        if self._receptor is not None:
+            self._receptor.encerrar()
+            self._receptor = None
+        self.btn_conectar.setEnabled(True)
+
+    def testar_email(self) -> None:
+        try:
+            with cursor_espera():
+                destino = self.api.testar_email()
+        except ErroAPI as exc:
+            self.msg_email.setText(exc.mensagem)
+            return
+        self.msg_email.setText(f"E-mail de teste enviado para {destino}. Confira a caixa de entrada (e o spam).")
+
+    def desconectar_email(self) -> None:
+        from PySide6.QtWidgets import QMessageBox as Caixa
+
+        if Caixa.question(self, "Desconectar", "Os avisos deixarão de ser enviados por e-mail até uma conta ser "
+                                               "conectada de novo. Desconectar?") != Caixa.StandardButton.Yes:
+            return
+        try:
+            self.api.desconectar_email()
+        except ErroAPI as exc:
+            self.msg_email.setText(exc.mensagem)
+            return
+        self.msg_email.setText("Conta desconectada.")
+        self.carregar_estado_email()
+
+    def hideEvent(self, evento) -> None:  # noqa: N802
+        self._cancelar_espera()
+        super().hideEvent(evento)
 
     @staticmethod
     def _quebrar(nome: str) -> str:
@@ -336,7 +480,7 @@ class TelaNotificacoes(QWidget):
         QMessageBox.information(self, "Notificações",
                                 f"Verificação concluída: {r.geradas} aviso(s) novo(s), {r.enviadas} e-mail(s) "
                                 f"enviado(s), {r.falhas} falha(s), {r.nao_enviadas} não enviado(s).")
-        if self.abas.currentIndex() == 1:
+        if self.abas.currentIndex() == 2:
             self.carregar_historico()
 
     # ---------------------------------------------------------------- histórico

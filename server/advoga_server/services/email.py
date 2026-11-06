@@ -35,6 +35,8 @@ class Enviador(Protocol):
     def enviar(self, msg: Mensagem) -> None: ...
 
 
-def obter_enviador(db: Session) -> Enviador | None:
+def obter_enviador(db: Session, cfg) -> Enviador | None:
     """Serviço de envio configurado no servidor, ou None se ainda não foi configurado."""
-    return None
+    from .email_google import obter
+
+    return obter(db, cfg)
