@@ -30,7 +30,7 @@ from advoga_shared.permissoes import Permissao
 from advoga_shared.validacoes import formatar_cnj
 
 from ...api_client.cliente import ClienteAPI, ErroAPI
-from ..componentes.basicos import ajustar_altura, bloco_campo, campo, rotulo
+from ..componentes.basicos import ajustar_altura, bloco_campo, campo, limpar_formulario, rotulo
 from ..componentes.espera import cursor_espera
 from ..componentes.formatos import data_br, data_hora_br, ler_data_br, ler_data_hora_br
 from ..componentes.seletores import SeletorCliente
@@ -402,8 +402,7 @@ class FichaProcesso(QDialog):
         self.subtitulo.setText(f"Cliente: {p.cliente_nome}  ·  {SITUACOES_PROCESSO.get(p.situacao, p.situacao)}"
                                + (f"  ·  {proximo_evento(p)}" if p.proximo_evento_em else ""))
         self.setWindowTitle(f"Processo {numero(p)}")
-        while self.form.rowCount():
-            self.form.removeRow(0)
+        limpar_formulario(self.form)
         linhas = [
             ("Cliente", p.cliente_nome), ("Número CNJ", numero(p)), ("Tipo de ação", p.tipo_acao),
             ("Área jurídica", p.area_juridica), ("Tribunal", p.tribunal), ("Comarca", p.comarca), ("Vara", p.vara),

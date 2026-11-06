@@ -41,7 +41,7 @@ from advoga_shared.esquemas import (
 from advoga_shared.permissoes import Permissao
 
 from ...api_client.cliente import ClienteAPI, ErroAPI
-from ..componentes.basicos import ajustar_altura, bloco_campo, campo, rotulo
+from ..componentes.basicos import ajustar_altura, bloco_campo, campo, limpar_formulario, rotulo
 from ..componentes.espera import cursor_espera
 from ..componentes.formatos import data_br, data_hora_br, dinheiro_br, ler_data_br
 from ..componentes.seletores import SeletorCliente
@@ -447,8 +447,7 @@ class FichaCompromisso(QDialog):
         aberto = c.situacao == "agendado"
         for b in (self.btn_editar, self.btn_reagendar, self.btn_atribuir, self.btn_cancelar, self.btn_concluir):
             b.setEnabled(aberto)
-        while self.form.rowCount():
-            self.form.removeRow(0)
+        limpar_formulario(self.form)
         duracao = next((t for t, v in DURACOES if v == c.duracao_minutos and v), None)
         linhas = [("Tipo", TIPOS_COMPROMISSO.get(c.tipo)), ("Data e horário", quando_texto(c)),
                   ("Duração", duracao), ("Situação", situacao_texto(c)), ("Prioridade", PRIORIDADES.get(c.prioridade)),

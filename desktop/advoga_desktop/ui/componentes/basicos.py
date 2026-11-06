@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame, QLabel, QLineEdit, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFormLayout, QFrame, QLabel, QLineEdit, QMessageBox, QVBoxLayout, QWidget
 
 from ...recursos_caminho import caminho_recurso
 
@@ -15,6 +15,23 @@ def rotulo(texto: str, nome_objeto: str | None = None, quebra: bool = False) -> 
         lbl.setObjectName(nome_objeto)
     lbl.setWordWrap(quebra)
     return lbl
+
+
+def limpar_formulario(form: QFormLayout) -> None:
+    """Esvazia um formulário de leitura sem destruir os rótulos na hora.
+
+    `removeRow` apaga os widgets imediatamente; se o Qt ainda tiver um evento
+    pendente para eles, o aplicativo pode fechar sozinho. Aqui as linhas saem
+    do formulário e os widgets são apagados com segurança pelo próprio Qt.
+    """
+    while form.rowCount():
+        linha = form.takeRow(0)
+        for item in (linha.labelItem, linha.fieldItem):
+            w = item.widget() if item is not None else None
+            if w is not None:
+                w.hide()
+                w.setParent(None)
+                w.deleteLater()
 
 
 def campo(placeholder: str = "", senha: bool = False, maximo: int | None = None) -> QLineEdit:

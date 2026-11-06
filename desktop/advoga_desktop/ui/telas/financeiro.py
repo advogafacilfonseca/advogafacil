@@ -52,7 +52,7 @@ from advoga_shared.esquemas import (
 from advoga_shared.permissoes import Permissao
 
 from ...api_client.cliente import ClienteAPI, ErroAPI
-from ..componentes.basicos import ajustar_altura, bloco_campo, campo, rotulo
+from ..componentes.basicos import ajustar_altura, bloco_campo, campo, limpar_formulario, rotulo
 from ..componentes.espera import cursor_espera
 from ..componentes.formatos import data_br, data_hora_br, dinheiro_br, ler_data_br, ler_dinheiro_br
 from ..componentes.seletores import SeletorCliente
@@ -718,8 +718,7 @@ class FichaContrato(QDialog):
                                f"  ·  início {data_br(c.data_inicio)}")
         self.btn_renegociar.setEnabled(c.situacao == "ativo")
         self.btn_cancelar.setEnabled(c.situacao != "cancelado")
-        while self.form.rowCount():
-            self.form.removeRow(0)
+        limpar_formulario(self.form)
         for rot, valor in (("Cliente", c.cliente_nome), ("Serviço contratado", c.servico_contratado),
                            ("Processo", c.processo_rotulo), ("Advogado responsável", c.advogado_responsavel_nome),
                            ("Início do atendimento", data_br(c.data_inicio)),

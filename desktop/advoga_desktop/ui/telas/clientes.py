@@ -35,7 +35,7 @@ from advoga_shared.permissoes import Permissao
 from advoga_shared.validacoes import UFS
 
 from ...api_client.cliente import ClienteAPI, ErroAPI
-from ..componentes.basicos import ajustar_altura, bloco_campo, campo, rotulo
+from ..componentes.basicos import ajustar_altura, bloco_campo, campo, limpar_formulario, rotulo
 from ..componentes.espera import cursor_espera
 from ..componentes.formatos import data_br, data_hora_br, formatar_cep, formatar_cpf, formatar_telefone, ler_data_br
 
@@ -355,8 +355,7 @@ class FichaCliente(QDialog):
             self.situacao.setText("")
         self.btn_encerrar.setVisible(c.situacao == "ativo")
         self.btn_reativar.setVisible(c.situacao == "encerrado")
-        while self.form.rowCount():
-            self.form.removeRow(0)
+        limpar_formulario(self.form)
         endereco = ", ".join(p for p in [c.logradouro, c.numero, c.complemento] if p)
         local = " / ".join(p for p in [c.bairro, f"{c.cidade}/{c.uf}" if c.cidade and c.uf else (c.cidade or c.uf)] if p)
         linhas = [
