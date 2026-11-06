@@ -64,7 +64,7 @@ class Configuracoes(BaseSettings):
         if self.database_url:
             return self.database_url
         if self.arquivo_servidor.exists():
-            dados = json.loads(self.arquivo_servidor.read_text(encoding="utf-8"))
+            dados = json.loads(self.arquivo_servidor.read_text(encoding="utf-8-sig"))
             url = dados.get("database_url")
             if url:
                 return url

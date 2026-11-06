@@ -23,7 +23,9 @@ from advoga_server.core.db import obter_sessao
 from advoga_server.core.migracoes import atualizar_banco
 from advoga_server.services.servidor import obter_identidade, preparar_codigo_instalacao
 
-ADMIN = os.environ.get("ADVOGA_TESTE_PG_ADMIN", "postgresql+psycopg://postgres@127.0.0.1:5433/postgres")
+ADMIN = os.environ.get(
+    "ADVOGA_TESTE_PG_ADMIN", "postgresql+psycopg://postgres@127.0.0.1:5433/postgres"
+)
 SENHA_MASTER = "SenhaForte2026"
 
 
