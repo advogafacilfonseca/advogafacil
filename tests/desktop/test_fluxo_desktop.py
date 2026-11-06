@@ -51,8 +51,9 @@ def servidor(app, cfg):
 
 @pytest.fixture(autouse=True)
 def config_isolada(tmp_path, monkeypatch):
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
-    monkeypatch.setenv("APPDATA", str(tmp_path / "cfg"))
+    # Sem setenv: alterar o ambiente com o servidor rodando em outras threads pode derrubar o processo.
+    from advoga_desktop import config_local
+    monkeypatch.setattr(config_local, "PASTA_OVERRIDE", tmp_path / "cfg" / "advogafacil")
 
 
 @pytest.fixture

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from advoga_desktop.ui.telas import documentos as documentos_tela
+
 import hashlib
 from pathlib import Path
 
@@ -23,7 +25,7 @@ from tests.servidor.test_processos_documentos import cnj
 
 @pytest.fixture
 def api(servidor, master, tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    monkeypatch.setattr(documentos_tela, "PASTA_OVERRIDE", tmp_path / "local")
     a = ClienteAPI(servidor, obter_certificado_servidor(servidor))
     a.login("master", SENHA_MASTER)
     yield a

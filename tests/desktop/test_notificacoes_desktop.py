@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from advoga_desktop.ui.telas import documentos as documentos_tela
+
 from datetime import UTC, date, datetime, time, timedelta
 
 import pytest
@@ -25,7 +27,7 @@ def em(dias: int, hora: int = 10) -> str:
 
 @pytest.fixture
 def api(servidor, master, tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    monkeypatch.setattr(documentos_tela, "PASTA_OVERRIDE", tmp_path / "local")
     a = ClienteAPI(servidor, obter_certificado_servidor(servidor))
     a.login("master", SENHA_MASTER)
     yield a

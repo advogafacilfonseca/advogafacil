@@ -74,3 +74,10 @@ Os testes simulam o Google. O envio real será conferido quando a conta oficial 
 - Confirmar a conta de envio (cartão no projeto). A conexão Google já está pronta; se a escolha
   for outro serviço (Brevo ou e-mail do domínio), adiciono esse tipo de conta.
 - Criar o identificador no Google Cloud (manual) e conectar pela tela.
+
+## Correção nos testes automáticos
+
+A queda ocasional dos testes registrada na etapa 5 foi identificada: alguns testes mudavam
+variáveis de ambiente do processo enquanto o servidor de testes rodava em outras threads, o que
+não é seguro no Linux e derrubava o processo de vez em quando. Os testes agora apontam as pastas
+temporárias sem mexer no ambiente. Era um problema só dos testes, não do aplicativo.

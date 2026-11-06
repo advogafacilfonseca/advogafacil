@@ -12,7 +12,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
+# Testes apontam para uma pasta temporária sem alterar variáveis de ambiente do processo
+# (alterar o ambiente com o servidor rodando em outras threads não é seguro).
+PASTA_OVERRIDE: Path | None = None
+
+
 def pasta_config_local() -> Path:
+    if PASTA_OVERRIDE is not None:
+        return PASTA_OVERRIDE
     if sys.platform == "win32":
         return Path(os.environ.get("APPDATA", Path.home())) / "AdvogaFacil"
     return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "advogafacil"

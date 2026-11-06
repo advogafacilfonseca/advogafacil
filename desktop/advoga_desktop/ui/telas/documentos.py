@@ -36,9 +36,14 @@ from ..componentes.formatos import data_hora_br, tamanho_legivel
 from ..componentes.seletores import SeletorCliente
 
 
+PASTA_OVERRIDE: Path | None = None  # testes: pasta temporária, sem alterar o ambiente do processo
+
+
 def pasta_visualizacao() -> Path:
     """Cópias abertas para leitura neste computador. São apagadas ao entrar e ao sair do sistema;
     o documento original permanece somente no servidor."""
+    if PASTA_OVERRIDE is not None:
+        return PASTA_OVERRIDE / "AdvogaFacil" / "abertos"
     base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
     return Path(base) / "AdvogaFacil" / "abertos"
 
