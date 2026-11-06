@@ -16,6 +16,7 @@ from .api import (
     rotas_auth,
     rotas_clientes,
     rotas_documentos,
+    rotas_financeiro,
     rotas_processos,
     rotas_sistema,
     rotas_usuarios,
@@ -62,6 +63,21 @@ _NOMES_CAMPOS = {
     "descricao": "Descrição",
     "nome_arquivo": "Nome do arquivo",
     "nome": "Nome do arquivo",
+    "servico_contratado": "Serviço contratado",
+    "data_inicio": "Data de início",
+    "valor_total": "Valor total do contrato",
+    "valor_entrada": "Valor da entrada",
+    "quantidade_parcelas": "Quantidade de parcelas",
+    "valor_parcela": "Valor de cada parcela",
+    "primeiro_vencimento": "Primeiro vencimento",
+    "dia_vencimento": "Dia dos vencimentos seguintes",
+    "valor": "Valor",
+    "data_recebimento": "Data de recebimento",
+    "forma_pagamento": "Forma de pagamento",
+    "categoria": "Categoria",
+    "data": "Data",
+    "novo_valor": "Novo valor",
+    "parcelas_ids": "Parcelas",
 }
 
 
@@ -77,6 +93,17 @@ def _mensagem_validacao(erro: dict) -> str:
         return f"{nome}: preenchimento muito longo."
     if tipo.startswith("date") or tipo.startswith("uuid"):
         return f"{nome}: valor inválido."
+    if tipo in ("greater_than", "greater_than_equal"):
+        limite = (erro.get("ctx") or {}).get("gt", (erro.get("ctx") or {}).get("ge"))
+        return f"{nome}: deve ser maior que {limite}." if tipo == "greater_than" else f"{nome}: não pode ser negativo."
+    if tipo in ("less_than_equal", "less_than"):
+        return f"{nome}: valor acima do permitido."
+    if tipo in ("decimal_parsing", "decimal_type", "int_parsing", "int_type", "float_parsing"):
+        return f"{nome}: informe um número válido."
+    if tipo in ("decimal_max_places", "decimal_max_digits", "decimal_whole_digits"):
+        return f"{nome}: use no máximo 2 casas decimais."
+    if tipo == "too_short" and campo == "parcelas_ids":
+        return "Escolha pelo menos uma parcela."
     if campo == "email":
         return "Informe um e-mail válido."
     msg = str(erro.get("msg", "Dados inválidos."))
@@ -111,4 +138,5 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
     app.include_router(rotas_clientes.rotas)
     app.include_router(rotas_processos.rotas)
     app.include_router(rotas_documentos.rotas)
+    app.include_router(rotas_financeiro.rotas)
     return app
