@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from advoga_shared.esquemas import Cliente
+from advoga_shared.permissoes import Permissao
 from advoga_shared.validacoes import UFS
 
 from ...api_client.cliente import ClienteAPI, ErroAPI
@@ -252,7 +253,8 @@ class DialogoCliente(QDialog):
 # =============================================================================== ficha
 class FichaCliente(QDialog):
     """Ficha do cliente: dados pessoais e histórico. Processos, contratos, financeiro, agenda e
-    documentos entram como novas abas nas etapas em que cada módulo for construído."""
+    documentos aparecem como abas conforme as permissões de quem está usando; contratos,
+    financeiro e agenda entram nas etapas em que cada módulo for construído."""
 
     alterado = Signal()
 
@@ -263,7 +265,7 @@ class FichaCliente(QDialog):
         self.cliente: Cliente | None = None
         self.setWindowTitle("Ficha do cliente")
         self.setMinimumSize(860, 600)
-        self.resize(900, 640)
+        self.resize(1040, 700)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 18, 24, 18)
         topo = QHBoxLayout()
@@ -297,6 +299,17 @@ class FichaCliente(QDialog):
         cab.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         cab.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         cab.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.painel_processos = None
+        self.painel_docs = None
+        permissoes = api.usuario.permissoes if api.usuario else []
+        if Permissao.PROCESSOS in permissoes:
+            from .processos import PainelProcessos
+            self.painel_processos = PainelProcessos(api, cliente=(cliente_id, ""))
+            self.abas.addTab(self.painel_processos, "Processos")
+        if Permissao.DOCUMENTOS in permissoes:
+            from .documentos import PainelDocumentos
+            self.painel_docs = PainelDocumentos(api, cliente=(cliente_id, ""))
+            self.abas.addTab(self.painel_docs, "Documentos")
         self.abas.addTab(self.tabela_hist, "Histórico")
         lay.addWidget(self.abas, 1)
 
@@ -306,14 +319,24 @@ class FichaCliente(QDialog):
         self.btn_editar.clicked.connect(self.editar)
         self.btn_encerrar.clicked.connect(self.encerrar)
         self.btn_reativar.clicked.connect(self.reativar)
-        self.abas.currentChanged.connect(lambda i: self.carregar_historico() if i == 1 else None)
+        self.abas.currentChanged.connect(self._ao_trocar_aba)
         self.carregar()
+
+    def _ao_trocar_aba(self, _i: int) -> None:
+        w = self.abas.currentWidget()
+        if w is self.tabela_hist:
+            self.carregar_historico()
+        elif w is not None and w in (self.painel_processos, self.painel_docs):
+            w.carregar(1)
 
     def carregar(self) -> None:
         with cursor_espera():
             self.cliente = self.api.obter_cliente(self.cliente_id)
+        for painel in (self.painel_processos, self.painel_docs):
+            if painel is not None:
+                painel.cliente = (self.cliente_id, self.cliente.nome_completo)
         self._mostrar(self.cliente)
-        if self.abas.currentIndex() == 1:
+        if self.abas.currentWidget() is self.tabela_hist:
             self.carregar_historico()
 
     def _mostrar(self, c: Cliente) -> None:
@@ -365,7 +388,7 @@ class FichaCliente(QDialog):
     def _apos_gravar(self, c: Cliente) -> None:
         self.cliente = c
         self._mostrar(c)
-        if self.abas.currentIndex() == 1:
+        if self.abas.currentWidget() is self.tabela_hist:
             self.carregar_historico()
         self.alterado.emit()
 
@@ -593,7 +616,7 @@ class TelaResultadosPesquisa(QWidget):
         self.titulo.setText(f"Resultados para “{r.termo}”")
         self.tabela.setRowCount(len(r.itens))
         for i, item in enumerate(r.itens):
-            tipo = {"cliente": "Cliente"}.get(item.tipo, item.tipo)
+            tipo = {"cliente": "Cliente", "processo": "Processo", "documento": "Documento"}.get(item.tipo, item.tipo)
             celulas = [tipo, item.titulo, item.resumo]
             for j, v in enumerate(celulas):
                 cel = QTableWidgetItem(v)

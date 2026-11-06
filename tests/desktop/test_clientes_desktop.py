@@ -95,7 +95,7 @@ def test_cadastro_ficha_edicao_e_encerramento(qtbot, tema, api, monkeypatch):
     assert ficha.cliente.situacao == "ativo"
 
     # Histórico
-    ficha.abas.setCurrentIndex(1)
+    ficha.abas.setCurrentWidget(ficha.tabela_hist)
     linhas = [ficha.tabela_hist.item(i, 2).text() for i in range(ficha.tabela_hist.rowCount())]
     assert linhas[0] == "Cliente reativado"
     assert any(t.startswith("Atendimento encerrado. Motivo: Processo finalizado") for t in linhas)

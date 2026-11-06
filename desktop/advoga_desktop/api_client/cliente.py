@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import mimetypes
+import os
 import platform
 import ssl
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -14,11 +17,18 @@ import httpx
 
 from advoga_shared.esquemas import (
     Cliente,
+    Documento,
     ItemAuditoria,
+    Movimentacao,
+    OpcaoCliente,
+    OpcaoProcesso,
     OpcaoUsuario,
     PaginaAuditoria,
     PaginaClientes,
+    PaginaDocumentos,
     PaginaPesquisa,
+    PaginaProcessos,
+    Processo,
     Saude,
     SessaoCriada,
     UsuarioDetalhe,
@@ -130,6 +140,9 @@ class ClienteAPI:
                             "Nada foi gravado em duplicidade. Verifique a conexão e tente novamente."
                         ) from None
                     time.sleep(1.5 * (tentativa + 1))
+        return self._tratar_resposta(r)
+
+    def _tratar_resposta(self, r: httpx.Response) -> Any:
         if r.status_code >= 400:
             try:
                 detalhe = r.json().get("detail")
@@ -248,3 +261,136 @@ class ClienteAPI:
 
     def usuarios_ativos(self) -> list[OpcaoUsuario]:
         return [OpcaoUsuario.model_validate(u) for u in self._requisitar("GET", "/api/usuarios-ativos")]
+
+    def clientes_opcoes(self, termo: str) -> list[OpcaoCliente]:
+        return [OpcaoCliente.model_validate(c) for c in self._requisitar("GET", "/api/clientes-opcoes",
+                                                                         params={"q": termo})]
+
+    def cliente_opcao(self, cliente_id: str) -> OpcaoCliente:
+        return OpcaoCliente.model_validate(self._requisitar("GET", f"/api/clientes-opcoes/{cliente_id}"))
+
+    # ------------------------------------------------------------- processos
+    def listar_processos(self, q: str = "", cliente_id: str | None = None, situacao: str | None = None,
+                         pagina: int = 1, por_pagina: int = 50) -> PaginaProcessos:
+        params = {"q": q.strip() or None, "cliente_id": cliente_id, "situacao": situacao,
+                  "pagina": pagina, "por_pagina": por_pagina}
+        return PaginaProcessos.model_validate(self._requisitar(
+            "GET", "/api/processos", params={k: v for k, v in params.items() if v not in (None, "")}))
+
+    def obter_processo(self, processo_id: str) -> Processo:
+        return Processo.model_validate(self._requisitar("GET", f"/api/processos/{processo_id}"))
+
+    def criar_processo(self, dados: dict[str, Any]) -> Processo:
+        return Processo.model_validate(self._requisitar("POST", "/api/processos", gravacao=True, json=dados))
+
+    def atualizar_processo(self, processo_id: str, dados: dict[str, Any]) -> Processo:
+        return Processo.model_validate(
+            self._requisitar("PATCH", f"/api/processos/{processo_id}", gravacao=True, json=dados))
+
+    def movimentacoes(self, processo_id: str) -> list[Movimentacao]:
+        return [Movimentacao.model_validate(m)
+                for m in self._requisitar("GET", f"/api/processos/{processo_id}/movimentacoes")]
+
+    def nova_movimentacao(self, processo_id: str, data_iso: str, descricao: str) -> Movimentacao:
+        return Movimentacao.model_validate(self._requisitar(
+            "POST", f"/api/processos/{processo_id}/movimentacoes", gravacao=True,
+            json={"data_movimentacao": data_iso, "descricao": descricao}))
+
+    def historico_processo(self, processo_id: str) -> list[ItemAuditoria]:
+        return [ItemAuditoria.model_validate(i)
+                for i in self._requisitar("GET", f"/api/processos/{processo_id}/historico")]
+
+    def processos_opcoes(self, cliente_id: str) -> list[OpcaoProcesso]:
+        return [OpcaoProcesso.model_validate(p)
+                for p in self._requisitar("GET", "/api/processos-opcoes", params={"cliente_id": cliente_id})]
+
+    # ------------------------------------------------------------ documentos
+    def listar_documentos(self, q: str = "", cliente_id: str | None = None, processo_id: str | None = None,
+                          somente_geral: bool = False, removidos: bool = False, pagina: int = 1,
+                          por_pagina: int = 50) -> PaginaDocumentos:
+        params: dict[str, Any] = {"q": q.strip() or None, "cliente_id": cliente_id, "processo_id": processo_id,
+                                  "pagina": pagina, "por_pagina": por_pagina}
+        if somente_geral:
+            params["somente_geral"] = "true"
+        if removidos:
+            params["removidos"] = "true"
+        return PaginaDocumentos.model_validate(self._requisitar(
+            "GET", "/api/documentos", params={k: v for k, v in params.items() if v not in (None, "")}))
+
+    def obter_documento(self, doc_id: str) -> Documento:
+        return Documento.model_validate(self._requisitar("GET", f"/api/documentos/{doc_id}"))
+
+    def anexar_documento(self, arquivo: Path, cliente_id: str, processo_id: str | None = None,
+                         descricao: str | None = None, nome: str | None = None) -> Documento:
+        """Envia o arquivo em partes. Se a conexão cair, reenvia com a mesma chave (sem duplicar)."""
+        arquivo = Path(arquivo)
+        if not arquivo.is_file():
+            raise ErroAPI("Arquivo não encontrado neste computador.")
+        tipo = mimetypes.guess_type(arquivo.name)[0] or "application/octet-stream"
+        params = {"cliente_id": cliente_id, "nome": nome or arquivo.name}
+        if processo_id:
+            params["processo_id"] = processo_id
+        if descricao:
+            params["descricao"] = descricao
+        cab = {"Authorization": f"Bearer {self.token}", "Content-Type": tipo,
+               "Content-Length": str(os.path.getsize(arquivo)), "Idempotency-Key": uuid.uuid4().hex}
+        for tentativa in range(self.TENTATIVAS_GRAVACAO):
+            try:
+                with open(arquivo, "rb") as f:
+                    r = self._enviar("POST", "/api/documentos", cab, params=params, content=_em_partes(f),
+                                     timeout=httpx.Timeout(30.0, write=600.0, read=120.0))
+                break
+            except ServidorIndisponivel:
+                if tentativa == self.TENTATIVAS_GRAVACAO - 1:
+                    raise ServidorIndisponivel(
+                        "A conexão com o servidor caiu durante o envio e o anexo não pôde ser confirmado. "
+                        "Nada foi gravado em duplicidade. Verifique a conexão e tente novamente.") from None
+                time.sleep(1.5 * (tentativa + 1))
+        return Documento.model_validate(self._tratar_resposta(r))
+
+    def baixar_documento(self, doc_id: str, destino: Path) -> Path:
+        """Baixa o arquivo, confere a impressão SHA-256 e só então grava no destino."""
+        destino = Path(destino)
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        parcial = destino.with_name(destino.name + ".baixando")
+        cab = {"Authorization": f"Bearer {self.token}"}
+        try:
+            with self._http.stream("GET", f"/api/documentos/{doc_id}/arquivo", headers=cab,
+                                   timeout=httpx.Timeout(30.0, read=300.0)) as r:
+                if r.status_code >= 400:
+                    r.read()
+                    self._tratar_resposta(r)
+                esperado = r.headers.get("X-Documento-SHA256", "")
+                h = hashlib.sha256()
+                with open(parcial, "wb") as f:
+                    for bloco in r.iter_bytes(1024 * 256):
+                        h.update(bloco)
+                        f.write(bloco)
+        except httpx.HTTPError as exc:
+            parcial.unlink(missing_ok=True)
+            raise ServidorIndisponivel("A conexão com o servidor caiu durante o download. Tente novamente.") from exc
+        except BaseException:
+            parcial.unlink(missing_ok=True)
+            raise
+        if esperado and h.hexdigest() != esperado:
+            parcial.unlink(missing_ok=True)
+            raise ErroAPI("O arquivo recebido não confere com o original (falha na transferência). Tente novamente.")
+        os.replace(parcial, destino)
+        return destino
+
+    def atualizar_documento(self, doc_id: str, dados: dict[str, Any]) -> Documento:
+        return Documento.model_validate(
+            self._requisitar("PATCH", f"/api/documentos/{doc_id}", gravacao=True, json=dados))
+
+    def remover_documento(self, doc_id: str, motivo: str, versao: int) -> Documento:
+        return Documento.model_validate(self._requisitar(
+            "POST", f"/api/documentos/{doc_id}/remover", gravacao=True, json={"motivo": motivo, "versao": versao}))
+
+    def restaurar_documento(self, doc_id: str, versao: int) -> Documento:
+        return Documento.model_validate(self._requisitar(
+            "POST", f"/api/documentos/{doc_id}/restaurar", gravacao=True, params={"versao": versao}))
+
+
+def _em_partes(arquivo, tamanho: int = 1024 * 256):
+    while bloco := arquivo.read(tamanho):
+        yield bloco

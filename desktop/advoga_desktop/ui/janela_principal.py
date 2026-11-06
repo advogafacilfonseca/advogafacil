@@ -31,6 +31,8 @@ from advoga_shared.permissoes import Permissao
 
 from .telas.auditoria import TelaAuditoria
 from .telas.clientes import FichaCliente, TelaClientes, TelaResultadosPesquisa
+from .telas.documentos import TelaDocumentos, abrir_documento, limpar_visualizacao
+from .telas.processos import FichaProcesso, TelaProcessos
 from .telas.painel import TelaPainel
 from .telas.usuarios import TelaUsuarios
 from .telas.trocar_senha import DialogoTrocarSenha
@@ -79,6 +81,7 @@ class JanelaPrincipal(QMainWindow):
         usuario = api.usuario
         assert usuario is not None
         self.setWindowTitle("Advoga Fácil")
+        limpar_visualizacao()
         self.setWindowIcon(QIcon(str(caminho_recurso("icone.png"))))
         self.resize(1280, 800)
 
@@ -103,7 +106,7 @@ class JanelaPrincipal(QMainWindow):
         # Pesquisa global: a partir de 3 caracteres, sem diferenciar acentos e maiúsculas.
         self.pesquisa = QLineEdit()
         self.pesquisa.setObjectName("pesquisaGlobal")
-        self.pesquisa.setPlaceholderText("Pesquisar clientes por nome, CPF ou telefone...")
+        self.pesquisa.setPlaceholderText("Pesquisar clientes, processos ou documentos...")
         self.pesquisa.setClearButtonEnabled(True)
         self.pesquisa.setMinimumWidth(420)
         self.pesquisa.setMinimumHeight(36)
@@ -137,6 +140,10 @@ class JanelaPrincipal(QMainWindow):
         if Permissao.CLIENTES in usuario.permissoes:
             self.tela_clientes = TelaClientes(api)
             self._adicionar_secao(ll, "Clientes", self.tela_clientes)
+        if Permissao.PROCESSOS in usuario.permissoes:
+            self._adicionar_secao(ll, "Processos", TelaProcessos(api))
+        if Permissao.DOCUMENTOS in usuario.permissoes:
+            self._adicionar_secao(ll, "Documentos", TelaDocumentos(api))
         if Permissao.ADMIN_USUARIOS in usuario.permissoes:
             self._adicionar_secao(ll, "Usuários e Permissões", TelaUsuarios(api))
         if usuario.is_master:
@@ -208,21 +215,23 @@ class JanelaPrincipal(QMainWindow):
         self.paginas.setCurrentIndex(self.indice_resultados)
 
     def abrir_registro(self, tipo: str, ident: str) -> None:
-        if tipo == "cliente":
-            try:
-                ficha = FichaCliente(self.api, ident, self)
-            except SessaoExpirada as exc:
-                self._saindo = True
-                self.sessao_encerrada.emit(exc.mensagem)
+        try:
+            if tipo == "documento":
+                abrir_documento(self.api, self.api.obter_documento(ident), self)
                 return
-            except ErroAPI as exc:
-                QMessageBox.warning(self, "Ficha do cliente", exc.mensagem)
-                return
-            if self.tela_clientes:
-                ficha.alterado.connect(lambda: self.tela_clientes.carregar(self.tela_clientes.pagina))
-            ficha.alterado.connect(lambda: self.tela_resultados.pesquisar(
-                self.tela_resultados.termo, self.tela_resultados.pagina))
-            ficha.exec()
+            ficha = FichaCliente(self.api, ident, self) if tipo == "cliente" else FichaProcesso(self.api, ident, self)
+        except SessaoExpirada as exc:
+            self._saindo = True
+            self.sessao_encerrada.emit(exc.mensagem)
+            return
+        except ErroAPI as exc:
+            QMessageBox.warning(self, "Abrir", exc.mensagem)
+            return
+        if tipo == "cliente" and self.tela_clientes:
+            ficha.alterado.connect(lambda: self.tela_clientes.carregar(self.tela_clientes.pagina))
+        ficha.alterado.connect(lambda: self.tela_resultados.pesquisar(
+            self.tela_resultados.termo, self.tela_resultados.pagina))
+        ficha.exec()
 
     def _checar_servidor(self) -> None:
         QThreadPool.globalInstance().start(
@@ -246,6 +255,7 @@ class JanelaPrincipal(QMainWindow):
         except ErroAPI:
             pass  # mesmo sem servidor, a sessão local é descartada
         self._timer.stop()
+        limpar_visualizacao()
         self._saindo = True
         self.sessao_encerrada.emit("")
 
@@ -255,5 +265,6 @@ class JanelaPrincipal(QMainWindow):
                 self.api.logout()
             except Exception:  # noqa: BLE001 - fechar a janela nunca pode falhar
                 pass
+            limpar_visualizacao()
             QApplication.quit()
         super().closeEvent(evento)
