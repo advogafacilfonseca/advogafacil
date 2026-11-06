@@ -17,6 +17,9 @@ from urllib.parse import urlsplit
 import httpx
 
 from advoga_shared.esquemas import (
+    AndamentoImportacao,
+    EstadoMigracao,
+    Migracao,
     ConfiguracaoBackup,
     EstadoBackups,
     ExecucaoBackup,
@@ -675,6 +678,37 @@ class ClienteAPI:
             parcial.unlink(missing_ok=True)
             raise ErroAPI(f"Não foi possível salvar o arquivo em {destino.parent}: {exc.strerror or exc}.") from exc
         return destino
+
+    # ------------------------------------------------------ migração de servidor
+    def estado_migracao(self) -> EstadoMigracao:
+        return EstadoMigracao.model_validate(self._requisitar("GET", "/api/migracao/estado"))
+
+    def verificar_destino_migracao(self, caminho: str) -> SituacaoDestino:
+        return SituacaoDestino.model_validate(self._requisitar("GET", "/api/migracao/verificar-destino",
+                                                               params={"caminho": caminho}))
+
+    def exportar_migracao(self, destino: str, senha: str, confirmacao: str, senha_master: str) -> Migracao:
+        return Migracao.model_validate(self._requisitar("POST", "/api/migracao/exportar", json={
+            "destino": destino, "senha": senha, "confirmacao": confirmacao, "senha_master": senha_master}))
+
+    def concluir_migracao(self, codigo: str, senha_master: str) -> Migracao:
+        return Migracao.model_validate(self._requisitar("POST", "/api/migracao/concluir", json={
+            "codigo": codigo, "senha_master": senha_master}))
+
+    def cancelar_migracao(self, senha_master: str) -> Migracao:
+        return Migracao.model_validate(self._requisitar("POST", "/api/migracao/cancelar",
+                                                        json={"senha_master": senha_master}))
+
+    def baixar_relatorio_migracao(self, migracao_id: str, destino: Path) -> Path:
+        return self._baixar(f"/api/migracao/{migracao_id}/relatorio.pdf", Path(destino))
+
+    def importar_migracao(self, codigo_instalacao: str, pacote: str, senha: str) -> str:
+        return self._requisitar("POST", "/api/setup/importar", json={
+            "codigo_instalacao": codigo_instalacao, "pacote": pacote, "senha": senha})["mensagem"]
+
+    def andamento_importacao(self, codigo_instalacao: str) -> AndamentoImportacao:
+        return AndamentoImportacao.model_validate(self._requisitar(
+            "GET", "/api/setup/importacao", headers={"X-Codigo-Instalacao": codigo_instalacao}))
 
 
 def _em_partes(arquivo, tamanho: int = 1024 * 256):

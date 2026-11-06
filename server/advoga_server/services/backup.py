@@ -296,17 +296,42 @@ class Instantaneo:
     revisao: str | None
     servidor_id: str | None
     tamanho_banco: int
+    somas: dict[str, str] = field(default_factory=dict)  # impressão digital do conteúdo de cada tabela
 
 
-def _exportar_banco(cfg: Configuracoes, url: str, destino: Path) -> Instantaneo:
-    """pg_dump num instantâneo; contagens e lista de arquivos lidas no mesmo instante."""
+def tabelas_do_banco(c) -> list[str]:
+    return [r[0] for r in c.execute(text(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' "
+        "AND table_type = 'BASE TABLE' AND table_name <> 'alembic_version' ORDER BY table_name"))]
+
+
+def somas_tabelas(c, tabelas: list[str]) -> dict[str, str]:
+    """Impressão digital (MD5) do conteúdo de cada tabela, independente da ordem física das linhas.
+    Usada na migração para provar que o banco novo é idêntico ao exportado."""
+    c.execute(text("SET LOCAL TimeZone = 'UTC'"))
+    c.execute(text("SET LOCAL DateStyle = 'ISO, YMD'"))
+    c.execute(text("SET LOCAL IntervalStyle = 'postgres'"))
+    c.execute(text("SET LOCAL extra_float_digits = 3"))
+    return {t: c.execute(text(f"SELECT md5(coalesce(string_agg(md5(x::text), '' ORDER BY md5(x::text)), '')) "
+                              f'FROM "{t}" x')).scalar_one() for t in tabelas}
+
+
+def _exportar_banco(cfg: Configuracoes, url: str, destino: Path, migracao: bool = False) -> Instantaneo:
+    """pg_dump num instantâneo; contagens e lista de arquivos lidas no mesmo instante.
+
+    Na migração, as tabelas ficam travadas para gravação até o fim da exportação (as gravações em
+    andamento terminam antes do instantâneo) e é calculada a impressão digital de cada tabela."""
     eng = create_engine(url, isolation_level="REPEATABLE READ", poolclass=NullPool)
     try:
         with eng.connect() as c:
             c.execute(text("SET TRANSACTION READ ONLY"))
+            nomes = [t.name for t in Base.metadata.sorted_tables]
+            if migracao:
+                # LOCK antes de qualquer SELECT: o instantâneo só é fixado depois da trava.
+                c.execute(text("LOCK TABLE " + ", ".join(f'"{t}"' for t in nomes) + " IN SHARE MODE"))
             snapshot = c.execute(text("SELECT pg_export_snapshot()")).scalar_one()
-            contagens = {t.name: c.execute(text(f'SELECT count(*) FROM "{t.name}"')).scalar_one()
-                         for t in Base.metadata.sorted_tables}
+            contagens = {t: c.execute(text(f'SELECT count(*) FROM "{t}"')).scalar_one() for t in nomes}
+            somas = somas_tabelas(c, nomes) if migracao else {}
             arquivos = [{"caminho": r[0], "sha256": r[1], "tamanho": r[2], "origem": "documentos"}
                         for r in c.execute(text("SELECT caminho, sha256, tamanho FROM documentos"))]
             arquivos += [{"caminho": "_financeiro/" + r[0], "sha256": r[1], "tamanho": r[2], "origem": "_financeiro"}
@@ -321,7 +346,7 @@ def _exportar_banco(cfg: Configuracoes, url: str, destino: Path) -> Instantaneo:
             c.rollback()
     finally:
         eng.dispose()
-    return Instantaneo(contagens, arquivos, revisao, servidor_id, tamanho)
+    return Instantaneo(contagens, arquivos, revisao, servidor_id, tamanho, somas)
 
 
 # =============================================================================== backup

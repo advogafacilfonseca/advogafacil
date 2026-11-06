@@ -17,7 +17,7 @@ class IdentidadeServidor(Base):
     __tablename__ = "identidade_servidor"
     __table_args__ = (
         CheckConstraint("id = 1", name="linha_unica"),
-        CheckConstraint("status IN ('ativo', 'desativado')", name="status_valido"),
+        CheckConstraint("status IN ('ativo', 'em_migracao', 'desativado')", name="status_valido"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, default=1)
@@ -30,6 +30,8 @@ class IdentidadeServidor(Base):
     )
     desativado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     observacao: Mapped[str | None] = mapped_column(String(255))
+    migrado_de: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    migrado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Configuracao(Base):

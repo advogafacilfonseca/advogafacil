@@ -29,6 +29,7 @@ def saude(db: Session = Depends(obter_db)) -> Saude:
             servidor_id=ident.servidor_id,
             servidor_status=ident.status,
             configurado=sistema_configurado(db),
+            migrado_de=ident.migrado_de,
         )
     except SQLAlchemyError as exc:
         raise HTTPException(

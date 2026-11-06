@@ -37,3 +37,30 @@ class ExecucaoBackup(Base):
         CheckConstraint("situacao IN ('em_andamento', 'sucesso', 'falhou')", name="situacao_valida"),
         Index("ix_backups_execucoes_inicio", "iniciado_em"),
     )
+
+
+class Migracao(Base):
+    """Exportação (no servidor antigo) ou importação (no servidor novo) da migração. Não é apagada."""
+
+    __tablename__ = "migracoes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tipo: Mapped[str] = mapped_column(String(15), nullable=False)  # exportacao | importacao
+    situacao: Mapped[str] = mapped_column(String(15), nullable=False)
+    iniciado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    concluido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    iniciado_por: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
+    servidor_origem: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    servidor_destino: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    arquivo: Mapped[str | None] = mapped_column(String(500))
+    etapa: Mapped[str | None] = mapped_column(String(200))
+    mensagem: Mapped[str | None] = mapped_column(Text)
+    codigo_hash: Mapped[str | None] = mapped_column(String(64))
+    relatorio: Mapped[Any | None] = mapped_column(JSONB)
+
+    __table_args__ = (
+        CheckConstraint("tipo IN ('exportacao', 'importacao')", name="tipo_valido"),
+        CheckConstraint("situacao IN ('em_andamento', 'exportada', 'concluida', 'cancelada', 'falhou', 'importada')",
+                        name="situacao_valida"),
+        Index("ix_migracoes_inicio", "iniciado_em"),
+    )

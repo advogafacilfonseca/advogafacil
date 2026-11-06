@@ -43,6 +43,7 @@ class Saude(BaseModel):
     servidor_id: uuid.UUID | None = None
     servidor_status: str | None = None
     configurado: bool
+    migrado_de: uuid.UUID | None = None  # servidor anterior, substituído por este numa migração
 
 
 class SetupStatus(BaseModel):
@@ -1340,3 +1341,91 @@ class EstadoBackups(BaseModel):
     ultimo_teste: ExecucaoBackup | None = None
     em_andamento: ExecucaoBackup | None = None
     alertas: list[str] = []
+
+
+# ============================================================================ migração de servidor
+SITUACOES_MIGRACAO = {
+    "em_andamento": "Em andamento",
+    "exportada": "Exportada (aguardando a conclusão)",
+    "concluida": "Concluída",
+    "cancelada": "Cancelada",
+    "falhou": "Falhou",
+    "importada": "Importada com sucesso",
+}
+STATUS_SERVIDOR = {
+    "ativo": "Servidor oficial",
+    "em_migracao": "Em migração (somente leitura)",
+    "desativado": "Desativado (substituído por outro servidor)",
+}
+
+
+class ExportarMigracao(BaseModel):
+    destino: str = Field(min_length=2, max_length=400)
+    senha: str = Field(min_length=12, max_length=200)
+    confirmacao: str
+    senha_master: str = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def _conferir(self) -> "ExportarMigracao":
+        if self.senha != self.confirmacao:
+            raise ValueError("A confirmação não confere com a senha do pacote.")
+        return self
+
+
+class ConcluirMigracao(BaseModel):
+    codigo: str = Field(min_length=12, max_length=20)
+    senha_master: str = Field(min_length=1, max_length=128)
+
+
+class CancelarMigracao(BaseModel):
+    senha_master: str = Field(min_length=1, max_length=128)
+
+
+class ImportarMigracao(BaseModel):
+    codigo_instalacao: str = Field(min_length=12, max_length=20)
+    pacote: str = Field(min_length=2, max_length=500)
+    senha: str = Field(min_length=12, max_length=200)
+
+
+class TabelaConferida(BaseModel):
+    tabela: str
+    nome: str
+    origem: int
+    destino: int | None = None
+    conferida: bool = False
+
+
+class Migracao(BaseModel):
+    id: uuid.UUID
+    tipo: str
+    situacao: str
+    iniciado_em: datetime
+    concluido_em: datetime | None = None
+    iniciado_por_nome: str | None = None
+    servidor_origem: uuid.UUID | None = None
+    servidor_destino: uuid.UUID | None = None
+    arquivo: str | None = None
+    etapa: str | None = None
+    mensagem: str | None = None
+    tabelas: list[TabelaConferida] = []
+    arquivos_total: int = 0
+    arquivos_conferidos: int = 0
+    pendencias: list[str] = []
+    tem_relatorio: bool = False
+
+
+class EstadoMigracao(BaseModel):
+    servidor_id: uuid.UUID
+    servidor_status: str
+    migrado_de: uuid.UUID | None = None
+    migrado_em: datetime | None = None
+    atual: Migracao | None = None  # exportação em andamento ou aguardando conclusão
+    historico: list[Migracao] = []
+
+
+class AndamentoImportacao(BaseModel):
+    situacao: str  # parada | em_andamento | sucesso | falhou
+    etapa: str | None = None
+    mensagem: str | None = None
+    codigo_confirmacao: str | None = None
+    relatorio: Migracao | None = None

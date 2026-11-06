@@ -59,6 +59,34 @@ def _restaurar(args) -> int:
     return 0
 
 
+def _importar_migracao(args) -> int:
+    import getpass
+    from pathlib import Path
+
+    from .services import migracao
+
+    cfg = obter_configuracoes()
+    cfg.garantir_pastas()
+    senha = getpass.getpass("Senha do pacote de migração: ")
+    try:
+        r = migracao.importar(cfg, Path(args.pacote), senha)
+    except Exception as exc:  # noqa: BLE001
+        print(f"IMPORTAÇÃO NÃO REALIZADA: {exc}")
+        print("O banco deste servidor continua vazio. Corrija o problema e tente de novo.")
+        return 1
+    print(r["mensagem"])
+    for t in r["tabelas"]:
+        print(f"  {t['nome']:45} {t['origem']:>8} -> {t['destino']:>8}  {'OK' if t['conferida'] else 'DIFERENTE'}")
+    print(f"  Documentos e comprovantes conferidos: {r['arquivos']}")
+    print()
+    print(f"CÓDIGO DE CONFIRMAÇÃO (informe no servidor antigo): {r['codigo']}")
+    print("O que falta fazer:")
+    for p in r["pendencias"]:
+        print(f"  - {p}")
+    print("Relatório gravado em:", cfg.pasta_dados / "migracoes")
+    return 0
+
+
 def _backup_agora(args) -> int:
     from .core.db import configurar_banco, obter_sessao
     from .services import backup
@@ -89,9 +117,14 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("restaurar", help="Restaura um backup num banco VAZIO (veja o guia de recuperação)")
     r.add_argument("--origem", required=True, help="Pasta do backup, pasta de uma versão ou arquivo .afbk")
     r.add_argument("--banco", help="URL do banco de destino (padrão: o banco deste servidor)")
+    im = sub.add_parser("importar-migracao",
+                        help="Importa o pacote de migração (.afmig) num servidor recém-instalado")
+    im.add_argument("--pacote", required=True, help="Caminho do arquivo .afmig")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
+    if args.comando == "importar-migracao":
+        return _importar_migracao(args)
     if args.comando == "restaurar":
         return _restaurar(args)
     if args.comando in ("backup", "testar-restauracao"):

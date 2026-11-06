@@ -48,6 +48,10 @@ class ServicoBackups:
         from fastapi import HTTPException
 
         from . import backup
+        from .servidor import status_atual
+
+        if status_atual() != "ativo":
+            return None  # em migração ou desativado: este servidor não envia avisos nem faz backups
 
         gerador = obter_sessao()
         db = next(gerador)

@@ -38,6 +38,7 @@ from .telas.financeiro import TelaContratos, TelaFinanceiro
 from .telas.documentos import TelaDocumentos, abrir_documento, limpar_visualizacao
 from .telas.processos import FichaProcesso, TelaProcessos
 from .telas.backups import TelaBackups
+from .telas.migracao import TelaMigracao
 from .telas.painel import TelaPainel
 from .telas.relatorios import TelaRelatorios
 from .telas.usuarios import TelaUsuarios
@@ -66,6 +67,8 @@ class _VerificarSaude(QRunnable):
             s = api.saude()
             if s.servidor_status == "desativado":
                 self.sinais.resultado.emit(False, "Servidor desativado após migração")
+            elif s.servidor_status == "em_migracao":
+                self.sinais.resultado.emit(False, "Servidor em migração — somente leitura")
             else:
                 self.sinais.resultado.emit(True, "Servidor conectado")
         except ServidorIndisponivel:
@@ -171,6 +174,7 @@ class JanelaPrincipal(QMainWindow):
         if usuario.is_master:
             self._adicionar_secao(ll, "Notificações", TelaNotificacoes(api))
             self._adicionar_secao(ll, "Central de Backups", TelaBackups(api))
+            self._adicionar_secao(ll, "Migração de servidor", TelaMigracao(api))
             self._adicionar_secao(ll, "Auditoria", TelaAuditoria(api))
         ll.addStretch()
         ll.addWidget(rotulo(f"  Versão {self._versao()}", "rotuloCampo"))

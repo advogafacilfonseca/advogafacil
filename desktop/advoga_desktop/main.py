@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QSplashScreen
 from .api_client.cliente import ClienteAPI, ErroAPI
 from .assistente.conexao import DialogoConexao
 from .assistente.criar_master import DialogoCriarMaster
-from .config_local import ConfigLocal, pasta_config_local
+from .config_local import ConfigLocal, conferir_servidor, pasta_config_local
 from .recursos_caminho import caminho_recurso
 from .ui.janela_principal import JanelaPrincipal
 from .ui.telas.login import TROCAR_SERVIDOR, DialogoLogin
@@ -61,6 +61,10 @@ class Aplicativo:
                     return False
             try:
                 self.api = ClienteAPI(self.config.endereco_servidor, self.config.certificado_pem)
+                saude = self.api.saude()
+                recusa = conferir_servidor(self.config, saude.servidor_id, saude.servidor_status, saude.migrado_de)
+                if recusa:
+                    raise ErroAPI(recusa)
                 configurado = self.api.sistema_configurado()
             except ErroAPI as exc:
                 escolha = QMessageBox.warning(
@@ -79,8 +83,12 @@ class Aplicativo:
                 dlg = DialogoCriarMaster(self.api)
                 if dlg.exec() != QDialog.DialogCode.Accepted:
                     return False
-                self.config.ultimo_usuario = dlg.nome_usuario_criado
-                self.config.salvar()
+                if dlg.importado:
+                    s2 = self.api.saude()
+                    conferir_servidor(self.config, s2.servidor_id, s2.servidor_status, s2.migrado_de)
+                else:
+                    self.config.ultimo_usuario = dlg.nome_usuario_criado
+                    self.config.salvar()
             return True
 
     def _entrar(self, aviso: str = "") -> None:

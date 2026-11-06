@@ -58,10 +58,13 @@ def banco_limpo(url_banco) -> None:
     with eng.begin() as c:
         c.execute(text("SET session_replication_role = replica"))
         c.execute(text(
-            "TRUNCATE backups_execucoes, notificacoes, destinatarios_notificacao, compromissos, pagamentos, parcelas, despesas, contratos, comprovantes, movimentacoes_processo, documentos, processos, clientes, chaves_idempotencia, auditoria, sessoes, permissoes_usuario, configuracoes, usuarios, "
+            "TRUNCATE migracoes, backups_execucoes, notificacoes, destinatarios_notificacao, compromissos, pagamentos, parcelas, despesas, contratos, comprovantes, movimentacoes_processo, documentos, processos, clientes, chaves_idempotencia, auditoria, sessoes, permissoes_usuario, configuracoes, usuarios, "
             "identidade_servidor CASCADE"
         ))
     eng.dispose()
+    from advoga_server.services.servidor import limpar_cache_status
+
+    limpar_cache_status()
 
 
 @pytest.fixture

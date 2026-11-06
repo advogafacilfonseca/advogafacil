@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import threading
+import time
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -61,3 +64,40 @@ def remover_codigo_instalacao(db: Session, cfg: Configuracoes) -> None:
         db.commit()
     if cfg.arquivo_codigo_instalacao.exists():
         cfg.arquivo_codigo_instalacao.unlink()
+
+
+# ------------------------------------------------- situação do servidor (ativo / em migração / desativado)
+_cache = {"status": None, "momento": 0.0}
+_cache_trava = threading.Lock()
+VALIDADE_CACHE = 3.0
+
+
+def definir_status_cache(status: str | None) -> None:
+    with _cache_trava:
+        _cache["status"] = status
+        _cache["momento"] = time.monotonic() if status else 0.0
+
+
+def limpar_cache_status() -> None:
+    definir_status_cache(None)
+
+
+def status_atual() -> str:
+    """Situação deste servidor, consultada no banco a cada poucos segundos (usada em toda requisição
+    e pelos serviços em segundo plano)."""
+    from ..core.db import obter_sessao
+
+    with _cache_trava:
+        if _cache["status"] and time.monotonic() - _cache["momento"] < VALIDADE_CACHE:
+            return _cache["status"]
+        anterior = _cache["status"]
+    gerador = obter_sessao()
+    try:
+        db = next(gerador)
+        st = db.scalar(select(IdentidadeServidor.status).where(IdentidadeServidor.id == 1)) or "ativo"
+    except Exception:  # noqa: BLE001 - banco indisponível (ou em importação): mantém o último valor
+        return anterior or "ativo"
+    finally:
+        gerador.close()
+    definir_status_cache(st)
+    return st

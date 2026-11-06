@@ -17,6 +17,7 @@ from .api import (
     rotas_auditoria,
     rotas_auth,
     rotas_backups,
+    rotas_migracao,
     rotas_clientes,
     rotas_documentos,
     rotas_email,
@@ -117,6 +118,13 @@ def _mensagem_validacao(erro: dict) -> str:
     return f"{nome}: {msg}" if nome and not msg.startswith(nome) and tipo != "value_error" else msg
 
 
+MSG_DESATIVADO = ("Este servidor foi desativado porque o Advoga Fácil foi migrado para um computador servidor novo. "
+                  "Use o servidor novo (em caso de dúvida, fale com a Advogada Master).")
+MSG_EM_MIGRACAO = ("O servidor está em migração para um computador novo e, por segurança, está em modo somente "
+                   "leitura. Nenhuma alteração pode ser gravada agora.")
+LIVRES_EM_MIGRACAO = {"/api/auth/login", "/api/auth/logout"}
+
+
 def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
     cfg = cfg or obter_configuracoes()
     configurar_banco(cfg.url_banco())
@@ -160,6 +168,24 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
             content=jsonable_encoder({"detail": " ".join(dict.fromkeys(mensagens))}),
         )
 
+    @app.middleware("http")
+    async def _situacao_do_servidor(request: Request, call_next):
+        """Servidor em migração: somente leitura. Servidor desativado: não atende mais ninguém.
+        Assim nunca há duas bases oficiais recebendo gravações."""
+        caminho = request.url.path
+        if caminho.startswith("/api/") and caminho not in ("/api/saude",) and not caminho.startswith("/api/setup/"):
+            from fastapi.concurrency import run_in_threadpool
+
+            from .services.servidor import status_atual
+
+            st = await run_in_threadpool(status_atual)
+            if st == "desativado":
+                return JSONResponse(status_code=410, content={"detail": MSG_DESATIVADO})
+            if (st == "em_migracao" and request.method not in ("GET", "HEAD", "OPTIONS")
+                    and caminho not in LIVRES_EM_MIGRACAO and not caminho.startswith("/api/migracao/")):
+                return JSONResponse(status_code=423, content={"detail": MSG_EM_MIGRACAO})
+        return await call_next(request)
+
     app.include_router(rotas_sistema.rotas)
     app.include_router(rotas_auth.rotas)
     app.include_router(rotas_usuarios.rotas)
@@ -173,4 +199,6 @@ def criar_app(cfg: Configuracoes | None = None) -> FastAPI:
     app.include_router(rotas_email.rotas)
     app.include_router(rotas_relatorios.rotas)
     app.include_router(rotas_backups.rotas)
+    app.include_router(rotas_migracao.rotas)
+    app.include_router(rotas_migracao.rotas_setup)
     return app

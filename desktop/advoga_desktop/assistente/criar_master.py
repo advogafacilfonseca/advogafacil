@@ -14,6 +14,7 @@ class DialogoCriarMaster(QDialog):
         super().__init__(parent)
         self.api = api
         self.nome_usuario_criado = ""
+        self.importado = False
         self.setWindowTitle("Advoga Fácil — Configuração inicial")
         self.setMinimumWidth(640)
 
@@ -52,15 +53,27 @@ class DialogoCriarMaster(QDialog):
         cancelar = QPushButton("Cancelar")
         self.btn_criar = QPushButton("Criar conta Master")
         self.btn_criar.setObjectName("primario")
+        self.btn_importar = QPushButton("Importar dados de outro servidor")
+        self.btn_importar.setToolTip("Para um computador servidor novo que vai substituir o atual (migração)")
         botoes.addWidget(cancelar)
+        botoes.addWidget(self.btn_importar)
         botoes.addStretch()
         botoes.addWidget(self.btn_criar)
         lay.addLayout(botoes)
 
         cancelar.clicked.connect(self.reject)
         self.btn_criar.clicked.connect(self.criar)
+        self.btn_importar.clicked.connect(self.importar)
 
         ajustar_altura(self)
+    def importar(self) -> None:
+        from .importar_migracao import DialogoImportarMigracao
+
+        dlg = DialogoImportarMigracao(self.api, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.resultado is not None:
+            self.importado = True
+            self.accept()
+
     def _validar_local(self) -> str | None:
         if not all(w.text().strip() for w in (self.codigo, self.nome, self.usuario, self.email)):
             return "Preencha todos os campos."

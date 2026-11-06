@@ -82,7 +82,7 @@ Restaure o sistema num computador novo (ou no mesmo, depois de formatado):
 7. Em **Notificações > Conta de envio**, conecte a conta Google de novo. Em **Central de Backups**, confira a configuração e defina de novo a senha da cópia criptografada. Por segurança, essas autorizações não são transferidas de um computador para outro.
 8. Faça um **backup completo** e um **teste de restauração** no servidor novo.
 
-> **Importante:** depois de restaurar em outro computador, **não volte a usar o servidor antigo** como base oficial. Se ele for recuperado, desligue o serviço do Advoga Fácil nele. O assistente de migração da próxima etapa passa a impedir isso automaticamente.
+> **Importante:** depois de restaurar em outro computador, **não volte a usar o servidor antigo** como base oficial. Se ele for recuperado, desligue o serviço do Advoga Fácil nele. Para trocar de computador com os dois funcionando, use o **Guia de migração do servidor** (`migracao-de-servidor.md`): ele desativa o servidor antigo automaticamente.
 
 ### Restaurar um arquivo ou dado apagado por engano
 

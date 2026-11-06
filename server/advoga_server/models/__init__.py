@@ -1,7 +1,7 @@
 """Modelos do banco de dados."""
 
 from .agenda import Compromisso
-from .backups import ExecucaoBackup
+from .backups import ExecucaoBackup, Migracao
 from .base import Base
 from .clientes import Cliente
 from .financeiro import Comprovante, Contrato, Despesa, Pagamento, Parcela
@@ -13,6 +13,7 @@ from .usuarios import PermissaoUsuario, Sessao, Usuario
 __all__ = [
     "Base",
     "ExecucaoBackup",
+    "Migracao",
     "Cliente",
     "Compromisso",
     "Comprovante",

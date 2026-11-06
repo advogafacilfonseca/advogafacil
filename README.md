@@ -14,9 +14,9 @@ ficam em `C:\ProgramData\AdvogaFacil`. Atualizar ou reinstalar o programa não a
 
 ## Estado atual
 
-Etapas 1 a 9 concluídas: fundação, usuários e permissões, clientes, processos e documentos,
+Etapas 1 a 10 concluídas: fundação, usuários e permissões, clientes, processos e documentos,
 contratos e financeiro, agenda e Central de Pendências, notificações por e-mail, painel e
-relatórios (PDF e Excel) e Central de Backups. Veja `docs/relatorios/` e `docs/manuais/`.
+relatórios (PDF e Excel), Central de Backups e assistente de migração do servidor. Veja `docs/relatorios/` e `docs/manuais/`.
 
 ## Desenvolvimento
 

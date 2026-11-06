@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
@@ -30,6 +30,8 @@ class ConfigLocal:
     endereco_servidor: str = ""
     certificado_pem: str = ""  # certificado do servidor registrado na primeira conexão
     ultimo_usuario: str = ""
+    servidor_id: str = ""  # identidade do servidor oficial conhecido por este computador
+    servidores_substituidos: list[str] = field(default_factory=list)  # servidores antigos (migração)
 
     @classmethod
     def carregar(cls) -> "ConfigLocal":
@@ -47,6 +49,31 @@ class ConfigLocal:
         pasta.mkdir(parents=True, exist_ok=True)
         (pasta / "cliente.json").write_text(json.dumps(asdict(self), ensure_ascii=False, indent=2),
                                             encoding="utf-8")
+
+
+MSG_SUBSTITUIDO = ("Este servidor foi substituído por um servidor novo numa migração e não é mais a base "
+                   "oficial do escritório. Para não gravar dados no lugar errado, o aplicativo não se conecta a ele. "
+                   "Informe o endereço do servidor novo.")
+
+
+def conferir_servidor(config: ConfigLocal, servidor_id, status: str | None, migrado_de) -> str | None:
+    """Impede o uso de um servidor antigo depois de uma migração. Retorna a mensagem de recusa, ou None.
+
+    Quando o servidor informa que substituiu outro (migrado_de), o antigo entra na lista de servidores
+    substituídos deste computador e passa a ser recusado, mesmo que alguém o ligue de novo."""
+    sid = str(servidor_id) if servidor_id else ""
+    if status == "desativado" or (sid and sid in config.servidores_substituidos):
+        return MSG_SUBSTITUIDO
+    alterado = False
+    if migrado_de and str(migrado_de) not in config.servidores_substituidos:
+        config.servidores_substituidos.append(str(migrado_de))
+        alterado = True
+    if sid and config.servidor_id != sid:
+        config.servidor_id = sid
+        alterado = True
+    if alterado:
+        config.salvar()
+    return None
 
 
 def normalizar_endereco(texto: str) -> str:
