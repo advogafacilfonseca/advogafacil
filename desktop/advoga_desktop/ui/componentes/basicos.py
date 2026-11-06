@@ -30,6 +30,8 @@ def campo(placeholder: str = "", senha: bool = False, maximo: int | None = None)
 
 def bloco_campo(titulo: str, widget: QWidget) -> QWidget:
     w = QWidget()
+    w.setObjectName("bloco")
+    widget.setMinimumHeight(max(36, widget.minimumHeight()))
     lay = QVBoxLayout(w)
     lay.setContentsMargins(0, 0, 0, 0)
     lay.setSpacing(4)

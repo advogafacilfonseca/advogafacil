@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 import platform
+import ssl
+import time
+import uuid
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
-from advoga_shared.esquemas import Saude, SessaoCriada, UsuarioPublico
+from advoga_shared.esquemas import PaginaAuditoria, Saude, SessaoCriada, UsuarioDetalhe, UsuarioPublico
 
 
 class ErroAPI(Exception):
@@ -25,32 +30,95 @@ class SessaoExpirada(ErroAPI):
     pass
 
 
+MSG_CERTIFICADO = (
+    "O certificado de segurança do servidor não confere com o registrado neste computador. "
+    "Por segurança, a conexão foi bloqueada. Se o servidor foi trocado ou reinstalado, use "
+    "\"Alterar servidor\" e confira a nova impressão digital com a Advogada Master."
+)
+
+
+def obter_certificado_servidor(endereco: str, timeout: float = 6.0) -> str:
+    """Baixa o certificado apresentado pelo servidor (para registro na primeira conexão)."""
+    partes = urlsplit(endereco)
+    try:
+        return ssl.get_server_certificate((partes.hostname, partes.port or 443), timeout=timeout)
+    except (OSError, ssl.SSLError) as exc:
+        raise ServidorIndisponivel(
+            "Não foi possível conectar ao servidor do Advoga Fácil. Verifique se o computador "
+            "servidor está ligado e se o endereço está correto."
+        ) from exc
+
+
+def impressao_digital(pem: str) -> str:
+    der = ssl.PEM_cert_to_DER_cert(pem)
+    h = hashlib.sha256(der).hexdigest().upper()
+    return ":".join(h[i:i + 2] for i in range(0, len(h), 2))
+
+
+def _contexto_ssl(pem: str) -> ssl.SSLContext:
+    ctx = ssl.create_default_context(cadata=pem)
+    # O certificado é fixado (somente este servidor é aceito); o nome usado para
+    # chegar até ele pode variar (IP da rede local, nome da Tailscale).
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    return ctx
+
+
 class ClienteAPI:
-    def __init__(self, endereco: str, timeout: float = 10.0) -> None:
+    TENTATIVAS_GRAVACAO = 3
+
+    def __init__(self, endereco: str, certificado_pem: str | None = None, timeout: float = 10.0) -> None:
         self.endereco = endereco.rstrip("/")
+        self.certificado_pem = certificado_pem or ""
         self.token: str | None = None
         self.usuario: UsuarioPublico | None = None
-        self._http = httpx.Client(base_url=self.endereco, timeout=timeout)
+        verificar: Any = True
+        if self.endereco.startswith("https://"):
+            if not self.certificado_pem:
+                raise ErroAPI("Certificado do servidor não registrado. Configure a conexão novamente.")
+            verificar = _contexto_ssl(self.certificado_pem)
+        self._http = httpx.Client(base_url=self.endereco, timeout=timeout, verify=verificar)
 
     def fechar(self) -> None:
         self._http.close()
 
     # ------------------------------------------------------------------ base
-    def _requisitar(self, metodo: str, rota: str, **kw: Any) -> Any:
-        cabecalhos = kw.pop("headers", {})
-        if self.token:
-            cabecalhos["Authorization"] = f"Bearer {self.token}"
+    def _enviar(self, metodo: str, rota: str, cabecalhos: dict[str, str], **kw: Any) -> httpx.Response:
         try:
-            r = self._http.request(metodo, rota, headers=cabecalhos, **kw)
+            return self._http.request(metodo, rota, headers=cabecalhos, **kw)
         except httpx.TimeoutException as exc:
             raise ServidorIndisponivel(
                 "O servidor demorou demais para responder. Verifique a conexão e tente novamente."
             ) from exc
         except httpx.HTTPError as exc:
+            if "CERTIFICATE_VERIFY_FAILED" in str(exc):
+                raise ErroAPI(MSG_CERTIFICADO) from exc
             raise ServidorIndisponivel(
                 "Não foi possível conectar ao servidor do Advoga Fácil. Verifique se o computador "
                 "servidor está ligado e se este computador está na rede do escritório ou na Tailscale."
             ) from exc
+
+    def _requisitar(self, metodo: str, rota: str, gravacao: bool = False, **kw: Any) -> Any:
+        cabecalhos = kw.pop("headers", {})
+        if self.token:
+            cabecalhos["Authorization"] = f"Bearer {self.token}"
+        if not gravacao:
+            r = self._enviar(metodo, rota, cabecalhos, **kw)
+        else:
+            # Gravação segura: a mesma chave acompanha as novas tentativas, então o servidor
+            # nunca grava a operação duas vezes, mesmo que a resposta tenha se perdido.
+            cabecalhos["Idempotency-Key"] = uuid.uuid4().hex
+            for tentativa in range(self.TENTATIVAS_GRAVACAO):
+                try:
+                    r = self._enviar(metodo, rota, cabecalhos, **kw)
+                    break
+                except ServidorIndisponivel:
+                    if tentativa == self.TENTATIVAS_GRAVACAO - 1:
+                        raise ServidorIndisponivel(
+                            "A conexão com o servidor caiu e a operação não pôde ser confirmada. "
+                            "Nada foi gravado em duplicidade. Verifique a conexão e tente novamente."
+                        ) from None
+                    time.sleep(1.5 * (tentativa + 1))
         if r.status_code >= 400:
             try:
                 detalhe = r.json().get("detail")
@@ -100,3 +168,33 @@ class ClienteAPI:
         r = self._requisitar("POST", "/api/auth/trocar-senha", json={
             "senha_atual": atual, "nova_senha": nova, "nova_senha_confirmacao": confirmacao})
         return r["mensagem"]
+
+    # -------------------------------------------------------------- usuários
+    def listar_usuarios(self) -> list[UsuarioDetalhe]:
+        return [UsuarioDetalhe.model_validate(u) for u in self._requisitar("GET", "/api/usuarios")]
+
+    def criar_usuario(self, dados: dict[str, Any]) -> UsuarioDetalhe:
+        return UsuarioDetalhe.model_validate(self._requisitar("POST", "/api/usuarios", gravacao=True, json=dados))
+
+    def atualizar_usuario(self, usuario_id: str, dados: dict[str, Any]) -> UsuarioDetalhe:
+        return UsuarioDetalhe.model_validate(
+            self._requisitar("PATCH", f"/api/usuarios/{usuario_id}", gravacao=True, json=dados))
+
+    def definir_permissoes(self, usuario_id: str, permissoes: list[str]) -> UsuarioDetalhe:
+        return UsuarioDetalhe.model_validate(self._requisitar(
+            "PUT", f"/api/usuarios/{usuario_id}/permissoes", gravacao=True, json={"permissoes": permissoes}))
+
+    def alterar_situacao_usuario(self, usuario_id: str, ativo: bool) -> UsuarioDetalhe:
+        acao = "reativar" if ativo else "desativar"
+        return UsuarioDetalhe.model_validate(
+            self._requisitar("POST", f"/api/usuarios/{usuario_id}/{acao}", gravacao=True))
+
+    def redefinir_senha_usuario(self, usuario_id: str, senha: str) -> UsuarioDetalhe:
+        return UsuarioDetalhe.model_validate(self._requisitar(
+            "POST", f"/api/usuarios/{usuario_id}/redefinir-senha", gravacao=True,
+            json={"senha_provisoria": senha}))
+
+    # ------------------------------------------------------------- auditoria
+    def auditoria(self, **filtros: Any) -> PaginaAuditoria:
+        params = {k: v for k, v in filtros.items() if v not in (None, "")}
+        return PaginaAuditoria.model_validate(self._requisitar("GET", "/api/auditoria", params=params))

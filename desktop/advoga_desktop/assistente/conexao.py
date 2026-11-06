@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QPushButton, QVBoxLayout
 
-from ..api_client.cliente import ClienteAPI, ErroAPI
+from ..api_client.cliente import ClienteAPI, ErroAPI, impressao_digital, obter_certificado_servidor
 from ..config_local import ConfigLocal, normalizar_endereco
 from ..ui.componentes.basicos import ajustar_altura, bloco_campo, campo, logotipo, rotulo
 from ..ui.componentes.espera import cursor_espera
@@ -28,7 +28,7 @@ class DialogoConexao(QDialog):
             "local ou na Tailscale.", "subtitulo", quebra=True))
 
         self.endereco = campo("Ex.: 127.0.0.1 ou servidor-escritorio")
-        self.endereco.setText(config.endereco_servidor.replace("http://", "") if config.endereco_servidor else "")
+        self.endereco.setText(config.endereco_servidor.split("://")[-1] if config.endereco_servidor else "")
         lay.addWidget(bloco_campo("Endereço do servidor", self.endereco))
 
         self.resultado = rotulo("", quebra=True)
@@ -49,6 +49,7 @@ class DialogoConexao(QDialog):
         self.endereco.textChanged.connect(lambda: self.btn_salvar.setEnabled(False))
         self.endereco.returnPressed.connect(self.testar)
         self._endereco_testado = ""
+        self._certificado = ""
 
         ajustar_altura(self)
     def testar(self) -> None:
@@ -56,25 +57,38 @@ class DialogoConexao(QDialog):
         if not endereco:
             self._mostrar("Informe o endereço do servidor.", ok=False)
             return
-        cliente = ClienteAPI(endereco, timeout=6)
+        certificado = ""
         try:
             with cursor_espera():
-                saude = cliente.saude()
+                if endereco.startswith("https://"):
+                    certificado = obter_certificado_servidor(endereco)
+                cliente = ClienteAPI(endereco, certificado, timeout=6)
+                try:
+                    saude = cliente.saude()
+                finally:
+                    cliente.fechar()
         except ErroAPI as exc:
             self._mostrar(exc.mensagem, ok=False)
             return
-        finally:
-            cliente.fechar()
         if saude.servidor_status == "desativado":
             self._mostrar("Este servidor foi desativado após uma migração. Use o endereço do novo servidor.", ok=False)
             return
         estado = "configurado" if saude.configurado else "aguardando a configuração inicial"
-        self._mostrar(f"Conectado ao servidor (versão {saude.versao}, banco de dados OK, {estado}).", ok=True)
+        texto = f"Conectado ao servidor (versão {saude.versao}, banco de dados OK, {estado})."
+        if certificado:
+            texto += ("\n\nImpressão digital do certificado de segurança:\n"
+                      f"{impressao_digital(certificado)}\n"
+                      "Confira se é igual à do arquivo IMPRESSAO_DIGITAL.txt do servidor antes de salvar.")
+        else:
+            texto += "\n\nAtenção: conexão sem criptografia (http). Use apenas para testes."
+        self._mostrar(texto, ok=True)
         self._endereco_testado = endereco
+        self._certificado = certificado
         self.btn_salvar.setEnabled(True)
 
     def salvar(self) -> None:
         self.config.endereco_servidor = self._endereco_testado
+        self.config.certificado_pem = self._certificado
         self.config.salvar()
         self.accept()
 

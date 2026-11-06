@@ -26,6 +26,7 @@ QSS = """
 QWidget {{ background: {fundo}; color: {texto}; }}
 QDialog, QMainWindow {{ background: {fundo}; }}
 QLabel {{ background: transparent; }}
+QWidget#bloco {{ background: transparent; }}
 QLabel#titulo {{ font-size: 18pt; font-weight: 600; color: {dourado_claro}; }}
 QLabel#subtitulo {{ font-size: 11pt; color: {texto_suave}; }}
 QLabel#rotuloCampo {{ color: {texto_suave}; font-size: 9.5pt; }}
@@ -34,6 +35,7 @@ QLabel#sucesso {{ color: {sucesso}; }}
 QLabel#secao {{ font-size: 13pt; font-weight: 600; color: {dourado}; }}
 QFrame#cartao {{ background: {superficie}; border: 1px solid {borda}; border-radius: 10px; }}
 QFrame#cartao QLabel {{ background: transparent; }}
+QWidget#bloco {{ background: transparent; }}
 QFrame#barraLateral {{ background: {superficie}; border-right: 1px solid {borda}; }}
 QFrame#cabecalho {{ background: {superficie}; border-bottom: 1px solid {dourado_escuro}; }}
 QLineEdit, QComboBox, QSpinBox, QDateEdit, QTextEdit, QPlainTextEdit {{
@@ -70,6 +72,16 @@ QToolTip {{ background: {grafite_claro}; color: {texto}; border: 1px solid {dour
 QScrollBar:vertical {{ background: {fundo}; width: 10px; }}
 QScrollBar::handle:vertical {{ background: {borda}; border-radius: 5px; min-height: 30px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+QTableWidget {{ background: {superficie}; alternate-background-color: {grafite}; gridline-color: {borda};
+    border: 1px solid {borda}; border-radius: 6px; selection-background-color: {dourado_escuro}; }}
+QHeaderView::section {{ background: {grafite}; color: {dourado}; border: none;
+    border-bottom: 1px solid {borda}; padding: 6px 8px; font-weight: 600; }}
+QCheckBox {{ background: transparent; spacing: 8px; padding: 3px 0; }}
+QCheckBox::indicator {{ width: 16px; height: 16px; border: 1px solid {borda}; border-radius: 3px; background: {grafite}; }}
+QCheckBox::indicator:checked {{ background: {dourado}; border-color: {dourado_claro}; }}
+QCheckBox:disabled {{ color: {texto_suave}; }}
+QScrollArea {{ border: none; }}
+QSplitter::handle {{ background: {fundo}; width: 12px; }}
 QMenu {{ background: {superficie}; border: 1px solid {borda}; }}
 QMenu::item {{ padding: 7px 22px; }}
 QMenu::item:selected {{ background: {grafite_claro}; color: {dourado_claro}; }}

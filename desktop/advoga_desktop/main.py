@@ -17,6 +17,7 @@ from .config_local import ConfigLocal, pasta_config_local
 from .recursos_caminho import caminho_recurso
 from .ui.janela_principal import JanelaPrincipal
 from .ui.telas.login import TROCAR_SERVIDOR, DialogoLogin
+from .ui.telas.trocar_senha import DialogoTrocarSenha
 from .ui.tema.tema import aplicar_tema
 
 log = logging.getLogger("advoga_desktop")
@@ -58,8 +59,8 @@ class Aplicativo:
             if not self.config.endereco_servidor:
                 if DialogoConexao(self.config).exec() != QDialog.DialogCode.Accepted:
                     return False
-            self.api = ClienteAPI(self.config.endereco_servidor)
             try:
+                self.api = ClienteAPI(self.config.endereco_servidor, self.config.certificado_pem)
                 configurado = self.api.sistema_configurado()
             except ErroAPI as exc:
                 escolha = QMessageBox.warning(
@@ -95,6 +96,16 @@ class Aplicativo:
         if resultado != QDialog.DialogCode.Accepted:
             self.app.quit()
             return
+        if self.api.usuario and self.api.usuario.deve_trocar_senha:
+            troca = DialogoTrocarSenha(self.api, obrigatoria=True)
+            if troca.exec() != QDialog.DialogCode.Accepted:
+                try:
+                    self.api.logout()
+                except ErroAPI:
+                    pass
+                QTimer.singleShot(0, self._entrar)
+                return
+            self.api.eu()
         self.janela = JanelaPrincipal(self.api)
         self.janela.sessao_encerrada.connect(self._sessao_encerrada)
         self.janela.showMaximized()

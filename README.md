@@ -14,9 +14,8 @@ ficam em `C:\ProgramData\AdvogaFacil`. Atualizar ou reinstalar o programa não a
 
 ## Estado atual
 
-Etapa 1 (fundação) concluída: banco inicial com proteções, login e sessões, criação protegida
-da conta Master, verificação de permissões no servidor, aplicativo com abertura, conexão,
-assistente da Master, login e janela principal. Veja `docs/relatorios/etapa-1.md`.
+Etapas 1 e 2 concluídas: fundação (banco, login, Master protegida) e usuários, permissões,
+auditoria e HTTPS. Veja `docs/relatorios/`.
 
 ## Desenvolvimento
 

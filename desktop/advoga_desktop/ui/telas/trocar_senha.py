@@ -8,14 +8,18 @@ from ..componentes.espera import cursor_espera
 
 
 class DialogoTrocarSenha(QDialog):
-    def __init__(self, api: ClienteAPI, parent=None) -> None:
+    def __init__(self, api: ClienteAPI, parent=None, obrigatoria: bool = False) -> None:
         super().__init__(parent)
         self.api = api
+        self.obrigatoria = obrigatoria
         self.setWindowTitle("Alterar minha senha")
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(440)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(28, 20, 28, 20)
-        lay.addWidget(rotulo("Alterar minha senha", "secao"))
+        lay.addWidget(rotulo("Crie a sua senha" if obrigatoria else "Alterar minha senha", "secao"))
+        if obrigatoria:
+            lay.addWidget(rotulo("Você entrou com uma senha provisória. Para continuar, crie uma senha "
+                                 "pessoal. Ninguém mais deve conhecê-la.", "subtitulo", True))
         self.atual = campo(senha=True, maximo=128)
         self.nova = campo("Mínimo de 10 caracteres, com letras e números", senha=True, maximo=128)
         self.conf = campo(senha=True, maximo=128)
@@ -25,8 +29,9 @@ class DialogoTrocarSenha(QDialog):
         self.erro = rotulo("", "erro", quebra=True)
         lay.addWidget(self.erro)
         b = QHBoxLayout()
-        cancelar = QPushButton("Cancelar")
-        salvar = QPushButton("Alterar senha")
+        cancelar = QPushButton("Sair" if obrigatoria else "Cancelar")
+        salvar = QPushButton("Salvar nova senha" if obrigatoria else "Alterar senha")
+        self.btn_salvar = salvar
         salvar.setObjectName("primario")
         b.addWidget(cancelar)
         b.addStretch()
@@ -44,5 +49,6 @@ class DialogoTrocarSenha(QDialog):
             self.erro.setText(exc.mensagem)
             ajustar_altura(self)
             return
-        avisar_sucesso(self, "Senha alterada", msg + " As outras sessões abertas foram encerradas.")
+        if not self.obrigatoria:
+            avisar_sucesso(self, "Senha alterada", msg + " As outras sessões abertas foram encerradas.")
         self.accept()

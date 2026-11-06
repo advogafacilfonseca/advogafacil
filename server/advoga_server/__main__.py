@@ -42,6 +42,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.comando in ("migrar", "codigo-instalacao"):
         _preparar()
+        cfg = obter_configuracoes()
+        if cfg.https:
+            from .core.tls import garantir_certificado
+
+            garantir_certificado(cfg)
         return 0
 
     import uvicorn
@@ -50,7 +55,14 @@ def main(argv: list[str] | None = None) -> int:
 
     _preparar()
     cfg = obter_configuracoes()
-    uvicorn.run(criar_app(cfg), host=cfg.host, port=cfg.porta, log_level="info")
+    opcoes_tls = {}
+    if cfg.https:
+        from .core.tls import garantir_certificado, impressao_digital
+
+        chave, cert = garantir_certificado(cfg)
+        opcoes_tls = {"ssl_keyfile": str(chave), "ssl_certfile": str(cert)}
+        print(f"HTTPS ativo. Impressão digital do certificado: {impressao_digital(cert.read_bytes())}")
+    uvicorn.run(criar_app(cfg), host=cfg.host, port=cfg.porta, log_level="info", **opcoes_tls)
     return 0
 
 

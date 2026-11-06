@@ -30,6 +30,7 @@ class Configuracoes(BaseSettings):
     database_url: str | None = None
     host: str = "127.0.0.1"
     porta: int = 8765
+    https: bool = True
 
     # Sessões: expiram por inatividade e também por tempo máximo.
     sessao_inatividade_minutos: int = 240

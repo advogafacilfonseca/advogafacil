@@ -21,6 +21,7 @@ def pasta_config_local() -> Path:
 @dataclass
 class ConfigLocal:
     endereco_servidor: str = ""
+    certificado_pem: str = ""  # certificado do servidor registrado na primeira conexão
     ultimo_usuario: str = ""
 
     @classmethod
@@ -42,12 +43,12 @@ class ConfigLocal:
 
 
 def normalizar_endereco(texto: str) -> str:
-    """Aceita 'servidor', 'servidor:8765' ou 'http(s)://servidor:8765'."""
+    """Aceita 'servidor', 'servidor:8765' ou 'http(s)://servidor:8765'. Padrão: HTTPS."""
     t = (texto or "").strip().rstrip("/")
     if not t:
         return ""
     if "://" not in t:
-        t = "http://" + t
+        t = "https://" + t
     esquema, resto = t.split("://", 1)
     if ":" not in resto.split("/")[0]:
         resto = resto.split("/")[0] + ":8765"

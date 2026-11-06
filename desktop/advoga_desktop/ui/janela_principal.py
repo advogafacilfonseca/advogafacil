@@ -22,10 +22,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..api_client.cliente import ClienteAPI, ErroAPI, SessaoExpirada
+from ..api_client.cliente import ClienteAPI, ErroAPI, ServidorIndisponivel, SessaoExpirada
 from ..recursos_caminho import caminho_recurso
 from .componentes.basicos import rotulo
+from advoga_shared.permissoes import Permissao
+
+from .telas.auditoria import TelaAuditoria
 from .telas.painel import TelaPainel
+from .telas.usuarios import TelaUsuarios
 from .telas.trocar_senha import DialogoTrocarSenha
 from .tema.tema import CORES
 
@@ -35,21 +39,28 @@ class _SinaisSaude(QObject):
 
 
 class _VerificarSaude(QRunnable):
-    def __init__(self, endereco: str, sinais: _SinaisSaude) -> None:
+    def __init__(self, endereco: str, certificado: str, sinais: _SinaisSaude) -> None:
         super().__init__()
         self.endereco = endereco
+        self.certificado = certificado
         self.sinais = sinais
 
     def run(self) -> None:
-        api = ClienteAPI(self.endereco, timeout=5)
+        try:
+            api = ClienteAPI(self.endereco, self.certificado, timeout=5)
+        except ErroAPI as exc:
+            self.sinais.resultado.emit(False, exc.mensagem)
+            return
         try:
             s = api.saude()
             if s.servidor_status == "desativado":
                 self.sinais.resultado.emit(False, "Servidor desativado após migração")
             else:
                 self.sinais.resultado.emit(True, "Servidor conectado")
-        except ErroAPI:
+        except ServidorIndisponivel:
             self.sinais.resultado.emit(False, "Servidor indisponível — alterações não podem ser gravadas")
+        except ErroAPI as exc:
+            self.sinais.resultado.emit(False, exc.mensagem)
         finally:
             api.fechar()
 
@@ -109,6 +120,10 @@ class JanelaPrincipal(QMainWindow):
         self.grupo.setExclusive(True)
 
         self._adicionar_secao(ll, "Painel inicial", TelaPainel(api))
+        if Permissao.ADMIN_USUARIOS in usuario.permissoes:
+            self._adicionar_secao(ll, "Usuários e Permissões", TelaUsuarios(api))
+        if usuario.is_master:
+            self._adicionar_secao(ll, "Auditoria", TelaAuditoria(api))
         ll.addStretch()
         ll.addWidget(rotulo(f"  Versão {self._versao()}", "rotuloCampo"))
 
@@ -145,7 +160,8 @@ class JanelaPrincipal(QMainWindow):
             botao.setChecked(True)
 
     def _checar_servidor(self) -> None:
-        QThreadPool.globalInstance().start(_VerificarSaude(self.api.endereco, self._sinais))
+        QThreadPool.globalInstance().start(
+            _VerificarSaude(self.api.endereco, self.api.certificado_pem, self._sinais))
 
     def _mostrar_status(self, ok: bool, texto: str) -> None:
         self.servidor_ok = ok
