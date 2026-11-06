@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+# Dados nunca entram no repositório
+dados/
+*.dump
+*.sqlite
+.env
