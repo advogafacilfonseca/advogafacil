@@ -117,12 +117,22 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("restaurar", help="Restaura um backup num banco VAZIO (veja o guia de recuperação)")
     r.add_argument("--origem", required=True, help="Pasta do backup, pasta de uma versão ou arquivo .afbk")
     r.add_argument("--banco", help="URL do banco de destino (padrão: o banco deste servidor)")
+    sub.add_parser("informacoes", help="Mostra e grava em COMO_CONECTAR.txt como conectar os computadores")
     im = sub.add_parser("importar-migracao",
                         help="Importa o pacote de migração (.afmig) num servidor recém-instalado")
     im.add_argument("--pacote", required=True, help="Caminho do arquivo .afmig")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
+    if args.comando == "informacoes":
+        from .core.conexao import gravar, texto
+
+        cfg = obter_configuracoes()
+        cfg.garantir_pastas()
+        arq, info = gravar(cfg)
+        print(texto(info))
+        print(f"Gravado em: {arq}")
+        return 0
     if args.comando == "importar-migracao":
         return _importar_migracao(args)
     if args.comando == "restaurar":

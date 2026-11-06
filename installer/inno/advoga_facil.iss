@@ -1,4 +1,4 @@
-; Instalador do aplicativo Advoga Fácil (cada computador do escritório).
+﻿; Instalador do aplicativo Advoga Fácil (cada computador do escritório).
 ; Compilar no Windows: iscc installer\inno\advoga_facil.iss  (após o PyInstaller)
 #define Versao "0.1.0"
 

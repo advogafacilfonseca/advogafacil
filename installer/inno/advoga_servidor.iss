@@ -1,4 +1,4 @@
-; Instalador do servidor Advoga Fácil (somente no computador servidor).
+﻿; Instalador do servidor Advoga Fácil (somente no computador servidor).
 ; Inclui: API, PostgreSQL 16 (embutido, acessível só pelo próprio computador) e serviços do Windows.
 ; Os dados ficam em C:\ProgramData\AdvogaFacil e NÃO são apagados na desinstalação.
 #define Versao "0.1.0"
@@ -35,6 +35,7 @@ Source: "..\servidor\remover_servicos.ps1"; DestDir: "{app}\scripts"; Flags: ign
 
 [Icons]
 Name: "{group}\Código de instalação (conta Master)"; Filename: "{commonappdata}\AdvogaFacil\config\CODIGO_DE_INSTALACAO.txt"
+Name: "{group}\Como conectar os computadores"; Filename: "{commonappdata}\AdvogaFacil\config\COMO_CONECTAR.txt"
 Name: "{group}\Pasta de dados do servidor"; Filename: "{commonappdata}\AdvogaFacil"
 Name: "{group}\Desinstalar Advoga Fácil Servidor"; Filename: "{uninstallexe}"
 
@@ -43,3 +44,20 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\remover_servicos.ps1"" -PastaPrograma ""{app}"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoverServicos"
+
+[Code]
+// Numa atualização, os serviços precisam parar antes de os arquivos serem substituídos
+// (programas em execução ficam travados pelo Windows). Os dados não são tocados.
+procedure PararServico(const Nome: String);
+var
+  Codigo: Integer;
+begin
+  Exec(ExpandConstant('{sys}\net.exe'), 'stop ' + Nome + ' /y', '', SW_HIDE, ewWaitUntilTerminated, Codigo);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  PararServico('AdvogaFacilServidor');
+  PararServico('AdvogaFacilPostgreSQL');
+  Result := '';
+end;

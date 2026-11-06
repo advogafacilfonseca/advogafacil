@@ -70,6 +70,60 @@ jobs:
         run: |
           iscc installer\inno\advoga_facil.iss
           iscc installer\inno\advoga_servidor.iss
+      - name: Teste real do instalador do servidor (instalar, atualizar e desinstalar)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $inst = Get-ChildItem dist\instaladores\AdvogaFacilServidor-Instalador-*.exe | Select-Object -First 1
+          function Esperar-Servidor {
+            for ($i = 0; $i -lt 60; $i++) {
+              try { return Invoke-RestMethod https://127.0.0.1:8765/api/saude -SkipCertificateCheck -TimeoutSec 5 }
+              catch { Start-Sleep -Seconds 3 }
+            }
+            Get-Content "$env:ProgramData\AdvogaFacil\logs\*" -ErrorAction SilentlyContinue | Select-Object -Last 80
+            throw "O servidor instalado não respondeu."
+          }
+          # 1) Instalação nova
+          Start-Process $inst.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=inst1.log" -Wait
+          $s = Esperar-Servidor
+          if ($s.banco -ne "ok" -or $s.configurado) { throw "Estado inesperado após instalar: $($s | ConvertTo-Json)" }
+          if (-not (Test-Path "$env:ProgramData\AdvogaFacil\config\CODIGO_DE_INSTALACAO.txt")) { throw "Sem código de instalação" }
+          if (-not (Test-Path "$env:ProgramData\AdvogaFacil\config\COMO_CONECTAR.txt")) { throw "Sem COMO_CONECTAR.txt" }
+          Get-Content "$env:ProgramData\AdvogaFacil\config\COMO_CONECTAR.txt"
+          # O PostgreSQL só escuta no próprio computador
+          $pg = Get-NetTCPConnection -LocalPort 5433 -State Listen
+          if ($pg | Where-Object { $_.LocalAddress -ne "127.0.0.1" }) { throw "PostgreSQL exposto fora de 127.0.0.1" }
+          Get-NetFirewallRule -DisplayName "Advoga Fácil Servidor*" | Format-Table DisplayName, Profile, Enabled
+          $id1 = $s.servidor_id
+          # 2) Atualização por cima (mesmo instalador): para os serviços, faz cópia do banco e mantém os dados
+          Start-Process $inst.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=inst2.log" -Wait
+          $s = Esperar-Servidor
+          if ($s.servidor_id -ne $id1) { throw "A atualização trocou a identidade do servidor" }
+          if (-not (Get-ChildItem "$env:ProgramData\AdvogaFacil\atualizacoes\antes-da-atualizacao_*.dump")) { throw "Sem cópia antes da atualização" }
+          # 3) Desinstalação: remove serviços e regras, preserva os dados
+          & "${env:ProgramFiles}\Advoga Fácil Servidor\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART | Out-Null
+          # O desinstalador do Inno se copia para a pasta temporária e continua em segundo plano
+          for ($i = 0; $i -lt 40 -and (Test-Path "${env:ProgramFiles}\Advoga Fácil Servidor\unins000.exe"); $i++) { Start-Sleep -Seconds 3 }
+          if (Get-Service AdvogaFacilServidor -ErrorAction SilentlyContinue) { throw "Serviço não removido" }
+          if (Get-Service AdvogaFacilPostgreSQL -ErrorAction SilentlyContinue) { throw "Serviço do banco não removido" }
+          if (Get-NetFirewallRule -DisplayName "Advoga Fácil Servidor*" -ErrorAction SilentlyContinue) { throw "Regra de firewall não removida" }
+          if (-not (Test-Path "$env:ProgramData\AdvogaFacil\postgres\data\PG_VERSION")) { throw "Os dados foram apagados" }
+          Write-Host "Instalador do servidor: instalação, atualização e desinstalação conferidas."
+      - name: Teste real do instalador do aplicativo
+        shell: pwsh
+        run: |
+          $inst = Get-ChildItem dist\instaladores\AdvogaFacil-Instalador-*.exe | Select-Object -First 1
+          Start-Process $inst.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+          if (-not (Test-Path "${env:ProgramFiles}\Advoga Fácil\AdvogaFacil.exe")) { throw "Aplicativo não instalado" }
+          Write-Host "Instalador do aplicativo conferido."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-instalacao
+          path: |
+            inst*.log
+            C:/ProgramData/AdvogaFacil/logs/*
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: instaladores-windows

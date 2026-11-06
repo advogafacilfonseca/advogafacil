@@ -1,4 +1,4 @@
-# Configuração do servidor Advoga Fácil. Executado pelo instalador (como administrador).
+﻿# Configuração do servidor Advoga Fácil. Executado pelo instalador (como administrador).
 # É idempotente: pode rodar de novo em uma atualização sem apagar dados.
 param([Parameter(Mandatory=$true)][string]$PastaPrograma)
 $ErrorActionPreference = "Stop"
@@ -63,6 +63,21 @@ if (-not (Test-Path (Join-Path $PgData "PG_VERSION"))) {
         & "$PgBin\pg_ctl.exe" register -N AdvogaFacilPostgreSQL -D $PgData -S auto
     }
     Start-Service AdvogaFacilPostgreSQL
+    Start-Sleep -Seconds 3
+
+    # Atualização: cópia de segurança do banco ANTES de atualizar a estrutura (fica em
+    # C:\ProgramData\AdvogaFacil\atualizacoes; as 5 mais recentes são mantidas).
+    $cfgAtual = Get-Content $ArqServidor -Raw | ConvertFrom-Json
+    $PastaAtu = Join-Path $Dados "atualizacoes"
+    New-Item -ItemType Directory -Force -Path $PastaAtu | Out-Null
+    $Copia = Join-Path $PastaAtu ("antes-da-atualizacao_" + (Get-Date -Format "yyyy-MM-dd_HHmmss") + ".dump")
+    $env:PGPASSWORD = $cfgAtual.postgres_superusuario_senha
+    & "$PgBin\pg_dump.exe" -h 127.0.0.1 -p $Porta -U postgres -d advoga -Fc -f $Copia
+    $codigoDump = $LASTEXITCODE
+    Remove-Item Env:\PGPASSWORD
+    if ($codigoDump -ne 0) { throw "Falha na cópia de segurança antes da atualização. Nada foi alterado no banco." }
+    Get-ChildItem $PastaAtu -Filter "antes-da-atualizacao_*.dump" | Sort-Object Name -Descending |
+        Select-Object -Skip 5 | Remove-Item -Force
 }
 
 # Cria/atualiza a estrutura do banco e gera o código de instalação (se ainda não houver Master).
@@ -76,9 +91,16 @@ if ((Get-Service AdvogaFacilServidor -ErrorAction SilentlyContinue) -eq $null) {
 }
 & $Servico restart
 
-# Firewall: API acessível só pela rede local e pela Tailscale (100.64.0.0/10). Nunca pela internet.
-Get-NetFirewallRule -DisplayName "Advoga Fácil Servidor" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-New-NetFirewallRule -DisplayName "Advoga Fácil Servidor" -Direction Inbound -Protocol TCP -LocalPort 8765 `
-    -RemoteAddress LocalSubnet,100.64.0.0/10 -Action Allow -Profile Any | Out-Null
+# Firewall: API acessível só pela rede local CONFIÁVEL (perfil Particular/Domínio) e pela
+# Tailscale (100.64.0.0/10). Em redes públicas (Wi-Fi de café, aeroporto), só pela Tailscale.
+# Nunca pela internet. O PostgreSQL não tem regra: ele só escuta em 127.0.0.1.
+Get-NetFirewallRule -DisplayName "Advoga Fácil Servidor*" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+New-NetFirewallRule -DisplayName "Advoga Fácil Servidor (rede do escritório)" -Direction Inbound -Protocol TCP `
+    -LocalPort 8765 -RemoteAddress LocalSubnet -Action Allow -Profile Private,Domain | Out-Null
+New-NetFirewallRule -DisplayName "Advoga Fácil Servidor (Tailscale)" -Direction Inbound -Protocol TCP `
+    -LocalPort 8765 -RemoteAddress 100.64.0.0/10 -Action Allow -Profile Any | Out-Null
+
+# Arquivo com os endereços e a impressão digital do certificado (atalho no menu Iniciar).
+& (Join-Path $PastaPrograma "servidor\AdvogaFacilServidor.exe") informacoes | Out-Null
 
 Stop-Transcript | Out-Null
