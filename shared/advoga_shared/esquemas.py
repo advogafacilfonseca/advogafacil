@@ -762,6 +762,8 @@ class PagamentoCriar(BaseModel):
     forma_pagamento: str
     observacoes: str | None = Field(default=None, max_length=2000)
     comprovante_id: uuid.UUID | None = None
+    # Valor maior que o restante da parcela: a sobra abate as próximas parcelas em aberto do mesmo contrato.
+    distribuir_excedente: bool = False
 
     @field_validator("forma_pagamento")
     @classmethod

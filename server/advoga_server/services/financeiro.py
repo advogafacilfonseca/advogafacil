@@ -28,6 +28,7 @@ from advoga_shared.esquemas import (
     Renegociar,
     ResumoFinanceiro,
     TotaisContrato,
+    nome_parcela,
 )
 from advoga_shared.esquemas import (
     Contrato as ContratoSaida,
@@ -377,26 +378,53 @@ def registrar_pagamento(db: Session, ator: Usuario, dados: PagamentoCriar, ip: s
     if p.situacao != "aberta":
         raise HTTPException(400, f"Esta parcela está {p.situacao} e não aceita recebimentos.")
     _validar_comprovante(db, dados.comprovante_id)
-    pago = _pagos(db, [p.id]).get(p.id, ZERO)
-    restante = p.valor - pago
+    restante = p.valor - _pagos(db, [p.id]).get(p.id, ZERO)
+    destinos: list[tuple[Parcela, Decimal]] = [(p, min(dados.valor, restante))]
     if dados.valor > restante:
-        raise HTTPException(422, f"O valor informado ({reais(dados.valor)}) é maior que o restante desta parcela "
-                                 f"({reais(restante)}).")
-    pg = Pagamento(id=uuid.uuid4(), parcela_id=p.id, contrato_id=c.id, cliente_id=c.cliente_id, valor=dados.valor,
-                   data_recebimento=dados.data_recebimento, forma_pagamento=dados.forma_pagamento,
-                   observacoes=(dados.observacoes or "").strip() or None, comprovante_id=dados.comprovante_id,
-                   registrado_por=ator.id)
-    db.add(pg)
-    if dados.valor == restante:
-        p.situacao = "paga"
-    p.versao += 1  # sinaliza a alteração para quem estiver com a parcela aberta na tela
-    db.flush()
+        if not dados.distribuir_excedente:
+            raise HTTPException(422, f"O valor informado ({reais(dados.valor)}) é maior que o restante desta parcela "
+                                     f"({reais(restante)}).")
+        # A sobra abate as próximas parcelas em aberto, na ordem de vencimento (todas travadas).
+        seguintes = db.scalars(select(Parcela).where(
+            Parcela.contrato_id == c.id, Parcela.situacao == "aberta", Parcela.id != p.id)
+            .order_by(Parcela.vencimento, Parcela.numero).with_for_update()).all()
+        pagos = _pagos(db, [s.id for s in seguintes])
+        sobra = dados.valor - restante
+        for s in seguintes:
+            if sobra <= 0:
+                break
+            parte = min(sobra, s.valor - pagos.get(s.id, ZERO))
+            if parte > 0:
+                destinos.append((s, parte))
+                sobra -= parte
+        if sobra > 0:
+            em_aberto = dados.valor - sobra
+            raise HTTPException(422, f"O valor informado ({reais(dados.valor)}) é maior que tudo o que está em aberto "
+                                     f"neste contrato ({reais(em_aberto)}).")
+    obs = (dados.observacoes or "").strip() or None
+    primeiro: Pagamento | None = None
+    for parcela, valor in destinos:
+        resto = parcela.valor - _pagos(db, [parcela.id]).get(parcela.id, ZERO)
+        nota = obs
+        if len(destinos) > 1:
+            extra = (f"Recebimento de {reais(dados.valor)} distribuído entre as parcelas "
+                     f"{', '.join(nome_parcela(x.tipo, x.numero) for x, _v in destinos)}.")
+            nota = f"{obs} · {extra}" if obs else extra
+        pg = Pagamento(id=uuid.uuid4(), parcela_id=parcela.id, contrato_id=c.id, cliente_id=c.cliente_id, valor=valor,
+                       data_recebimento=dados.data_recebimento, forma_pagamento=dados.forma_pagamento,
+                       observacoes=nota, comprovante_id=dados.comprovante_id, registrado_por=ator.id)
+        db.add(pg)
+        if valor == resto:
+            parcela.situacao = "paga"
+        parcela.versao += 1  # sinaliza a alteração para quem estiver com a parcela aberta na tela
+        db.flush()
+        auditoria.registrar(db, "financeiro.recebimento", usuario_id=ator.id, entidade="contrato", entidade_id=c.id,
+                            detalhes={"parcela": parcela.numero, "valor": str(valor), "forma": dados.forma_pagamento,
+                                      "data": dados.data_recebimento.isoformat(), "parcial": valor < resto,
+                                      **({"distribuido_de": str(dados.valor)} if len(destinos) > 1 else {})}, ip=ip)
+        primeiro = primeiro or pg
     _atualizar_situacao_contrato(db, c.id)
-    auditoria.registrar(db, "financeiro.recebimento", usuario_id=ator.id, entidade="contrato", entidade_id=c.id,
-                        detalhes={"parcela": p.numero, "valor": str(dados.valor), "forma": dados.forma_pagamento,
-                                  "data": dados.data_recebimento.isoformat(),
-                                  "parcial": dados.valor < restante}, ip=ip)
-    return pg
+    return primeiro
 
 
 def estornar_pagamento(db: Session, ator: Usuario, pagamento_id: uuid.UUID, motivo: str, ip: str | None) -> Pagamento:

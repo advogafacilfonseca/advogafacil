@@ -544,13 +544,24 @@ class DialogoRecebimento(QDialog):
             self.erro.setText("Informe o valor recebido e a data.")
             ajustar_altura(self)
             return
+        distribuir = False
+        restante = self.parcela.valor_restante
+        if valor > restante:
+            resp = QMessageBox.question(
+                self, "Valor maior que a parcela",
+                f"O valor recebido ({dinheiro_br(valor)}) é maior que o restante desta parcela "
+                f"({dinheiro_br(restante)}).\n\nLançar a diferença de {dinheiro_br(valor - restante)} nas próximas "
+                "parcelas em aberto deste contrato?")
+            if resp != QMessageBox.StandardButton.Yes:
+                return
+            distribuir = True
         try:
             with cursor_espera():
                 comprovante_id = str(self.api.enviar_comprovante(self.arquivo).id) if self.arquivo else None
                 self.resultado = self.api.registrar_pagamento({
                     "parcela_id": str(self.parcela.id), "valor": str(valor), "data_recebimento": data.isoformat(),
                     "forma_pagamento": self.forma.currentData(), "observacoes": self.obs.text().strip() or None,
-                    "comprovante_id": comprovante_id})
+                    "comprovante_id": comprovante_id, "distribuir_excedente": distribuir})
         except ErroAPI as exc:
             self.erro.setText(exc.mensagem)
             ajustar_altura(self)

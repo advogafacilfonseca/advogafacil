@@ -122,7 +122,8 @@ def test_visoes_dia_semana_mes(qtbot, tema, api, semana):
     assert any("23:00  Reunião com o cliente" == hoje.lista.item(j).text() for j in range(hoje.lista.count()))
     assert tela.avisos.count() >= 3
     avisos = [tela.avisos.item(i).text() for i in range(tela.avisos.count())]
-    assert any(a.startswith("HOJE TEM REUNIÃO") for a in avisos)
+    if datetime.now().hour < 23:  # depois das 23h a reunião de hoje já passou e deixa de ser aviso
+        assert any(a.startswith("HOJE TEM REUNIÃO") for a in avisos)
     assert any(a.startswith("EXISTE UM RETORNO DE CLIENTE PENDENTE") for a in avisos)
     _captura(tela, "31_agenda_semana")
     # Mês

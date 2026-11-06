@@ -334,3 +334,33 @@ def test_valor_ja_pago_de_cliente_antigo(cliente, token_master, cli):
     assert r.status_code == 422 and "futuro" in r.text
     aberta = next(p for p in c["parcelas"] if p["tipo"] == "parcela")
     assert pagar(cliente, token_master, aberta["id"], "500.00", forma_pagamento="anterior").status_code == 422
+
+
+def test_pagamento_maior_que_a_parcela_distribui_nas_proximas(cliente, token_master, cli):
+    c = contrato(cliente, token_master, cli["id"], valor_total="900.00", valor_entrada="0", quantidade_parcelas=3,
+                 valor_parcela="300.00")
+    p1, p2, p3 = c["parcelas"]
+    # Sem pedir a distribuição, valor maior é recusado (evita erro de digitação)
+    r = pagar(cliente, token_master, p1["id"], "400.00")
+    assert r.status_code == 422 and "maior que o restante" in r.text
+    # Com a distribuição: 300 quitam a 1ª e 100 abatem a 2ª
+    r = pagar(cliente, token_master, p1["id"], "400.00", distribuir_excedente=True)
+    assert r.status_code == 201, r.text
+    ps = {p["id"]: p for p in cliente.get(f"/api/contratos/{c['id']}", headers=auth(token_master)).json()["parcelas"]}
+    assert ps[p1["id"]]["situacao"] == "paga"
+    assert ps[p2["id"]]["situacao"] == "aberta" and D(ps[p2["id"]]["valor_restante"]) == D("200")
+    assert D(ps[p3["id"]]["valor_restante"]) == D("300")
+    t = totais(cliente, token_master, c["id"])
+    assert t["recebido"] == D("400") and t["a_receber"] == D("500")
+    invariante(t)
+    itens = cliente.get("/api/financeiro/pagamentos", headers=auth(token_master),
+                        params={"contrato_id": c["id"]}).json()["itens"]
+    assert sorted(D(i["valor"]) for i in itens) == [D("100"), D("300")]
+    assert all("distribuído" in (i["observacoes"] or "") for i in itens)
+    # Mais do que tudo o que está em aberto: recusado, nada gravado
+    r = pagar(cliente, token_master, p2["id"], "600.00", distribuir_excedente=True)
+    assert r.status_code == 422 and "em aberto" in r.text
+    assert totais(cliente, token_master, c["id"])["recebido"] == D("400")
+    # Quitar exatamente o resto do contrato pela 2ª parcela
+    assert pagar(cliente, token_master, p2["id"], "500.00", distribuir_excedente=True).status_code == 201
+    assert cliente.get(f"/api/contratos/{c['id']}", headers=auth(token_master)).json()["situacao"] == "quitado"

@@ -320,3 +320,22 @@ def test_sigilo_financeiro_na_interface(qtbot, tema, api, servidor, cliente, tok
     assert "Contratos" in menus and "Financeiro" in menus
     janela.close()
     janela_m.close()
+
+
+def test_recebimento_maior_que_a_parcela_pergunta_e_distribui(qtbot, tema, api, cliente_joao, monkeypatch):
+    c = _contrato(api, cliente_joao[0], valor_total="900", valor_entrada="0", quantidade_parcelas=3)
+    p1 = c.parcelas[0]
+    perguntas = []
+    respostas = iter([QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes])
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: (perguntas.append(a[2]), next(respostas))[1])
+    d = DialogoRecebimento(api, p1, cliente_joao[1])
+    qtbot.addWidget(d)
+    d.valor.setText("400,00")
+    d.salvar()  # "Não": nada é gravado e o diálogo continua aberto
+    assert d.resultado is None and api.obter_contrato(str(c.id)).totais.recebido == 0
+    assert "R$ 100,00" in perguntas[0]
+    d.salvar()  # "Sim": quita a parcela e abate a sobra da próxima
+    assert d.resultado is not None, d.erro.text()
+    c2 = api.obter_contrato(str(c.id))
+    assert c2.totais.recebido == Decimal("400.00")
+    assert c2.parcelas[0].situacao == "paga" and c2.parcelas[1].valor_restante == Decimal("200.00")
