@@ -299,3 +299,38 @@ def test_comprovante_restrito_ao_financeiro(cliente, token_master, cli, cfg):
     assert cliente.get(f"/api/financeiro/comprovantes/{comp['id']}/arquivo", headers=auth(td)).status_code == 403
     assert cliente.get("/api/documentos", headers=auth(td)).json()["total"] == 0
     assert (cfg.pasta_documentos / "_financeiro").exists()
+
+
+def test_valor_ja_pago_de_cliente_antigo(cliente, token_master, cli):
+    """Cliente que já era do escritório: o que ele pagou antes do cadastro soma no recebido."""
+    antes = (HOJE - timedelta(days=90)).isoformat()
+    c = contrato(cliente, token_master, cli["id"], valor_ja_pago="2000.00", data_valor_ja_pago=antes,
+                 valor_entrada="0", quantidade_parcelas=8, valor_parcela="500.00")
+    anterior = [p for p in c["parcelas"] if p["tipo"] == "anterior"]
+    assert len(anterior) == 1 and D(anterior[0]["valor"]) == D("2000") and anterior[0]["situacao"] == "paga"
+    assert anterior[0]["vencimento"] == antes
+    assert len([p for p in c["parcelas"] if p["tipo"] == "parcela"]) == 8
+    t = totais(cliente, token_master, c["id"])
+    assert t["recebido"] == D("2000") and t["a_receber"] == D("4000")
+    invariante(t)
+    pagamentos = cliente.get("/api/financeiro/pagamentos", headers=auth(token_master),
+                             params={"contrato_id": c["id"]}).json()["itens"]
+    assert [(D(p["valor"]), p["forma_pagamento"], p["data_recebimento"]) for p in pagamentos] == [
+        (D("2000"), "anterior", antes)]
+
+    # Tudo já pago antes do sistema: contrato nasce quitado, sem parcelas a receber
+    q = contrato(cliente, token_master, cli["id"], valor_ja_pago="6000.00", valor_entrada="0",
+                 quantidade_parcelas=None, valor_parcela=None, primeiro_vencimento=None)
+    assert q["situacao"] == "quitado" and [p["tipo"] for p in q["parcelas"]] == ["anterior"]
+
+    # Já pago + entrada maior que o total, data futura, e a forma "anterior" não serve para recebimentos comuns
+    h = auth(token_master)
+    base = {"cliente_id": cli["id"], "servico_contratado": "Defesa", "data_inicio": HOJE.isoformat(),
+            "valor_total": "1000.00"}
+    r = cliente.post("/api/contratos", headers=h, json=base | {"valor_ja_pago": "800.00", "valor_entrada": "300.00"})
+    assert r.status_code == 422 and "já pago" in r.text
+    r = cliente.post("/api/contratos", headers=h, json=base | {
+        "valor_ja_pago": "1000.00", "data_valor_ja_pago": (HOJE + timedelta(days=1)).isoformat()})
+    assert r.status_code == 422 and "futuro" in r.text
+    aberta = next(p for p in c["parcelas"] if p["tipo"] == "parcela")
+    assert pagar(cliente, token_master, aberta["id"], "500.00", forma_pagamento="anterior").status_code == 422

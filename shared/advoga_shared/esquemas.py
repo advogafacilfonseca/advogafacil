@@ -613,6 +613,18 @@ FORMAS_PAGAMENTO = {
     "pix": "Pix", "dinheiro": "Dinheiro", "transferencia": "Transferência", "boleto": "Boleto",
     "cartao_credito": "Cartão de crédito", "cartao_debito": "Cartão de débito", "cheque": "Cheque", "outro": "Outro",
 }
+# Valor que o cliente já tinha pago antes de o contrato ser cadastrado no sistema (clientes antigos).
+# Só é gerado no cadastro do contrato; não aparece na lista de formas para registrar recebimentos.
+FORMA_PAGO_ANTES = "anterior"
+NOMES_FORMAS_PAGAMENTO = {**FORMAS_PAGAMENTO, FORMA_PAGO_ANTES: "Pago antes do sistema"}
+
+
+def nome_parcela(tipo: str, numero: int) -> str:
+    if tipo == "entrada":
+        return "Entrada"
+    if tipo == "anterior":
+        return "Pago antes do sistema"
+    return f"Parcela {numero}"
 CATEGORIAS_DESPESA = {
     "combustivel": "Combustível", "estacionamento": "Estacionamento", "alimentacao": "Alimentação",
     "transporte": "Transporte", "materiais": "Materiais", "administrativas": "Despesas administrativas",
@@ -635,6 +647,8 @@ class ContratoCriar(BaseModel):
     valor_total: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
     valor_entrada: Decimal = Field(default=Decimal("0"), ge=0, max_digits=14, decimal_places=2)
     vencimento_entrada: date | None = None
+    valor_ja_pago: Decimal = Field(default=Decimal("0"), ge=0, max_digits=14, decimal_places=2)
+    data_valor_ja_pago: date | None = None
     quantidade_parcelas: int | None = Field(default=None, ge=0, le=360)
     valor_parcela: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
     primeiro_vencimento: date | None = None
@@ -670,7 +684,7 @@ class Parcela(BaseModel):
     id: uuid.UUID
     contrato_id: uuid.UUID
     numero: int
-    tipo: str  # entrada | parcela
+    tipo: str  # entrada | parcela | anterior (pago antes do sistema)
     valor: Decimal
     vencimento: date
     situacao: str

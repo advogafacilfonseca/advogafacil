@@ -95,6 +95,28 @@ def test_cadastrar_contrato_pela_tela(qtbot, tema, api, cliente_joao):
     assert len(c.parcelas) == 6
 
 
+def test_contrato_de_cliente_antigo_com_valor_ja_pago(qtbot, tema, api, cliente_joao):
+    d = DialogoContrato(api, cliente_joao)
+    qtbot.addWidget(d)
+    d.servico.setText("Defesa criminal em ação penal")
+    d.total.setText("6.000,00")
+    d.ja_pago.setText("2.000,00")
+    d.data_ja_pago.setText("10/01/2025")
+    d.qtd.setText("4")
+    d.primeiro.setText("10/12/2030")
+    assert d.previa.rowCount() == 4 and d.previa.item(0, 2).text() == "R$ 1.000,00"
+    assert d.resumo.text().startswith("Já pago R$ 2.000,00") and "= R$ 6.000,00" in d.resumo.text()
+    _captura(d, "64_contrato_valor_ja_pago")
+    qtbot.mouseClick(d.btn_salvar, Qt.MouseButton.LeftButton)
+    assert d.resultado is not None, d.erro.text()
+    c = api.obter_contrato(str(d.resultado.id))
+    assert c.totais.recebido == Decimal("2000.00") and c.totais.a_receber == Decimal("4000.00")
+    ficha = FichaContrato(api, str(c.id))
+    qtbot.addWidget(ficha)
+    assert ficha.tabela_parcelas.item(0, 0).text() == "Pago antes do sistema"
+    assert ficha.cartoes["a_receber"].text() == "R$ 4.000,00"
+
+
 def test_contrato_personalizado_e_erro_de_soma(qtbot, tema, api, cliente_joao):
     d = DialogoContrato(api, cliente_joao)
     qtbot.addWidget(d)

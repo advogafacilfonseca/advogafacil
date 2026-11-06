@@ -15,26 +15,35 @@ import logging
 import uuid
 from datetime import datetime, time, timedelta
 
-from fastapi import HTTPException
-from sqlalchemy import func, select, text
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-
 from advoga_shared.esquemas import (
-    CATEGORIAS_FINANCEIRAS,
     CATEGORIA_BACKUP,
+    CATEGORIAS_FINANCEIRAS,
     CATEGORIAS_NOTIFICACAO,
     TIPOS_COMPROMISSO,
     CategoriaNotificacao,
     ConfiguracaoNotificacoes,
     ConfiguracaoNotificacoesSalvar,
-    Notificacao as NotificacaoSaida,
     ResultadoCiclo,
     UsuarioNotificavel,
+    nome_parcela,
+)
+from advoga_shared.esquemas import (
+    Notificacao as NotificacaoSaida,
 )
 from advoga_shared.permissoes import Permissao
+from fastapi import HTTPException
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from ..models import Compromisso, Configuracao, DestinatarioNotificacao, Notificacao, Parcela, Usuario
+from ..models import (
+    Compromisso,
+    Configuracao,
+    DestinatarioNotificacao,
+    Notificacao,
+    Parcela,
+    Usuario,
+)
 from . import auditoria
 from .autenticacao import permissoes_efetivas
 from .email import Enviador, ErroEnvio, Mensagem, obter_enviador
@@ -206,7 +215,7 @@ def gerar(db: Session, agora: datetime | None = None) -> int:
     if usuarios_fin:
         for a in financeiro.avisos(db):
             p = a.parcela
-            nome = "Entrada" if p.tipo == "entrada" else f"Parcela {p.numero}"
+            nome = nome_parcela(p.tipo, p.numero)
             msg = (f"{nome} do contrato \"{p.servico_contratado or ''}\"\nCliente: {p.cliente_nome or '—'}\n"
                    f"Vencimento: {p.vencimento.strftime('%d/%m/%Y')}\n"
                    "Consulte o valor no Advoga Fácil (área Financeiro).")

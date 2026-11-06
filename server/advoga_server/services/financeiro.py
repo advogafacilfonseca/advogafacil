@@ -15,29 +15,46 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 
-from fastapi import HTTPException
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
-
 from advoga_shared.esquemas import (
-    AvisoFinanceiro,
     CATEGORIAS_DESPESA,
-    Contrato as ContratoSaida,
+    FORMA_PAGO_ANTES,
+    AvisoFinanceiro,
     ContratoAtualizar,
     ContratoCriar,
-    Despesa as DespesaSaida,
     DespesaAtualizar,
     DespesaCriar,
-    Pagamento as PagamentoSaida,
     PagamentoCriar,
-    Parcela as ParcelaSaida,
     ParcelaPlano,
     Renegociar,
     ResumoFinanceiro,
     TotaisContrato,
 )
+from advoga_shared.esquemas import (
+    Contrato as ContratoSaida,
+)
+from advoga_shared.esquemas import (
+    Despesa as DespesaSaida,
+)
+from advoga_shared.esquemas import (
+    Pagamento as PagamentoSaida,
+)
+from advoga_shared.esquemas import (
+    Parcela as ParcelaSaida,
+)
+from fastapi import HTTPException
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-from ..models import Cliente, Comprovante, Contrato, Despesa, Pagamento, Parcela, Processo, Usuario
+from ..models import (
+    Cliente,
+    Comprovante,
+    Contrato,
+    Despesa,
+    Pagamento,
+    Parcela,
+    Processo,
+    Usuario,
+)
 from . import auditoria
 from .clientes import _nome_usuario, _validar_responsavel, _valor_auditavel
 from .processos import rotulo as rotulo_processo
@@ -79,7 +96,7 @@ def plano_parcelas(valor: Decimal, quantidade: int | None, valor_parcela: Decima
     """Gera (valor, vencimento) das parcelas que somam exatamente `valor`."""
     if valor <= 0:
         if quantidade or personalizadas:
-            raise HTTPException(422, "Não há saldo para parcelar: a entrada já cobre o valor total.")
+            raise HTTPException(422, "Não há saldo para parcelar: a entrada e o valor já pago cobrem o valor total.")
         return []
     if personalizadas:
         soma = sum((p.valor for p in personalizadas), ZERO)
@@ -195,7 +212,12 @@ def criar_contrato(db: Session, ator: Usuario, dados: ContratoCriar, ip: str | N
     _validar_responsavel(db, dados.advogado_responsavel_id)
     if dados.valor_entrada > dados.valor_total:
         raise HTTPException(422, "A entrada não pode ser maior que o valor total do contrato.")
-    saldo = dados.valor_total - dados.valor_entrada
+    if dados.valor_ja_pago + dados.valor_entrada > dados.valor_total:
+        raise HTTPException(422, "O valor já pago somado à entrada não pode ser maior que o valor total do contrato.")
+    data_ja_pago = dados.data_valor_ja_pago or dados.data_inicio
+    if dados.valor_ja_pago > 0 and data_ja_pago > date.today():
+        raise HTTPException(422, "A data do valor já pago não pode estar no futuro.")
+    saldo = dados.valor_total - dados.valor_ja_pago - dados.valor_entrada
     plano = plano_parcelas(saldo, dados.quantidade_parcelas, dados.valor_parcela, dados.primeiro_vencimento,
                            dados.dia_vencimento, dados.parcelas_personalizadas)
     c = Contrato(id=uuid.uuid4(), cliente_id=dados.cliente_id, processo_id=dados.processo_id,
@@ -204,15 +226,26 @@ def criar_contrato(db: Session, ator: Usuario, dados: ContratoCriar, ip: str | N
                  observacoes=dados.observacoes, criado_por=ator.id)
     db.add(c)
     db.flush()
+    if dados.valor_ja_pago > 0:
+        # Cliente antigo: o que já foi pago antes do cadastro entra como recebido, para somar no total pago.
+        anterior = Parcela(id=uuid.uuid4(), contrato_id=c.id, numero=-1, tipo="anterior", valor=dados.valor_ja_pago,
+                           vencimento=data_ja_pago, situacao="paga")
+        db.add(anterior)
+        db.flush()
+        db.add(Pagamento(id=uuid.uuid4(), parcela_id=anterior.id, contrato_id=c.id, cliente_id=c.cliente_id,
+                         valor=dados.valor_ja_pago, data_recebimento=data_ja_pago, forma_pagamento=FORMA_PAGO_ANTES,
+                         observacoes="Valor pago antes do cadastro do contrato no sistema.", registrado_por=ator.id))
     if dados.valor_entrada > 0:
         db.add(Parcela(contrato_id=c.id, numero=0, tipo="entrada", valor=dados.valor_entrada,
                        vencimento=dados.vencimento_entrada or dados.data_inicio))
     for i, (valor, venc) in enumerate(plano, start=1):
         db.add(Parcela(contrato_id=c.id, numero=i, tipo="parcela", valor=valor, vencimento=venc))
     db.flush()
+    _atualizar_situacao_contrato(db, c.id)
     auditoria.registrar(db, "contrato.criado", usuario_id=ator.id, entidade="contrato", entidade_id=c.id,
                         detalhes={"cliente_id": str(c.cliente_id), "servico": c.servico_contratado,
                                   "valor_total": str(c.valor_total), "entrada": str(dados.valor_entrada),
+                                  "ja_pago": str(dados.valor_ja_pago),
                                   "parcelas": len(plano)}, ip=ip)
     return c
 

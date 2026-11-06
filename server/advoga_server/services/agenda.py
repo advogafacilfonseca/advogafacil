@@ -13,15 +13,10 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
 
-from fastapi import HTTPException
-from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session, aliased
-
 from advoga_shared.esquemas import (
     TIPOS_COMPROMISSO,
     AvisoAgenda,
     CentralPendencias,
-    Compromisso as CompromissoSaida,
     CompromissoAtribuir,
     CompromissoAtualizar,
     CompromissoCancelar,
@@ -29,7 +24,14 @@ from advoga_shared.esquemas import (
     CompromissoCriar,
     CompromissoReagendar,
     ItemPendencia,
+    nome_parcela,
 )
+from advoga_shared.esquemas import (
+    Compromisso as CompromissoSaida,
+)
+from fastapi import HTTPException
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from ..models import Cliente, Compromisso, Processo, Usuario
 from . import auditoria
@@ -448,7 +450,7 @@ def central(db: Session, usuario: Usuario, financeiro: bool, *, ate: date | None
             grupo = "atrasado" if p.atrasada else ("hoje" if p.vencimento == dia else "amanha")
             if situacao == "atrasado" and grupo != "atrasado":
                 continue
-            nome = "Entrada" if p.tipo == "entrada" else f"Parcela {p.numero}"
+            nome = nome_parcela(p.tipo, p.numero)
             itens.append(ItemPendencia(origem="parcela", grupo=grupo, titulo=f"{nome} · {p.servico_contratado or ''}",
                                        tipo="financeiro", vencimento=p.vencimento, cliente_nome=p.cliente_nome,
                                        parcela=p))

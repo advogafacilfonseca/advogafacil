@@ -15,13 +15,9 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from fastapi import HTTPException
-from sqlalchemy import Date, cast, func, select
-from sqlalchemy.orm import Session
-
 from advoga_shared.esquemas import (
     CATEGORIAS_DESPESA,
-    FORMAS_PAGAMENTO,
+    NOMES_FORMAS_PAGAMENTO,
     PRIORIDADES,
     SITUACOES_CONTRATO,
     SITUACOES_PARCELA,
@@ -36,12 +32,25 @@ from advoga_shared.esquemas import (
     Painel,
     Relatorio,
     TotalRelatorio,
+    nome_parcela,
     relatorio_permitido,
 )
 from advoga_shared.permissoes import Permissao
 from advoga_shared.validacoes import formatar_cnj, formatar_cpf, formatar_telefone
+from fastapi import HTTPException
+from sqlalchemy import Date, cast, func, select
+from sqlalchemy.orm import Session
 
-from ..models import Cliente, Compromisso, Contrato, Despesa, Pagamento, Parcela, Processo, Usuario
+from ..models import (
+    Cliente,
+    Compromisso,
+    Contrato,
+    Despesa,
+    Pagamento,
+    Parcela,
+    Processo,
+    Usuario,
+)
 from . import agenda
 from .financeiro import CENTAVO, ZERO, reais, resumo
 
@@ -58,6 +67,10 @@ class Filtros:
     cliente_id: uuid.UUID | None = None
     situacao: str | None = None
 
+
+
+def _coluna_parcela(p: Parcela) -> str:
+    return str(p.numero) if p.tipo == "parcela" else nome_parcela(p.tipo, p.numero)
 
 def pode_gerar(tipo: str, permissoes: set[Permissao]) -> bool:
     return relatorio_permitido(tipo, permissoes)
@@ -332,7 +345,7 @@ def _parcelas(db: Session, f: Filtros, nomes: dict, _fin: bool):
             vencido_t += restante
         pago_t += pago
         aberto_t += restante
-        out.append([p.vencimento, cliente, c.servico_contratado, "Entrada" if p.tipo == "entrada" else str(p.numero),
+        out.append([p.vencimento, cliente, c.servico_contratado, _coluna_parcela(p),
                     p.valor, pago, restante, situacao])
     totais = [TotalRelatorio(rotulo="Parcelas", valor=str(len(out))),
               TotalRelatorio(rotulo="Total pago", valor=reais(pago_t)),
@@ -366,7 +379,7 @@ def _recebimentos(db: Session, f: Filtros, nomes: dict, _fin: bool):
     valido = estornado = ZERO
     por_forma: dict[str, Decimal] = {}
     for pg, c, p, cliente in linhas:
-        forma = FORMAS_PAGAMENTO.get(pg.forma_pagamento, pg.forma_pagamento)
+        forma = NOMES_FORMAS_PAGAMENTO.get(pg.forma_pagamento, pg.forma_pagamento)
         if pg.estornado_em:
             estornado += pg.valor
             sit = "Estornado" + (f" ({pg.motivo_estorno})" if pg.motivo_estorno else "")
@@ -375,7 +388,7 @@ def _recebimentos(db: Session, f: Filtros, nomes: dict, _fin: bool):
             por_forma[forma] = por_forma.get(forma, ZERO) + pg.valor
             sit = "Válido"
         out.append([pg.data_recebimento, cliente, c.servico_contratado,
-                    "Entrada" if p.tipo == "entrada" else str(p.numero), forma, pg.valor,
+                    _coluna_parcela(p), forma, pg.valor,
                     nomes.get(pg.registrado_por), sit])
     totais = [TotalRelatorio(rotulo="Recebimentos", valor=str(len(out))),
               TotalRelatorio(rotulo="Total recebido (válidos)", valor=reais(valido))]

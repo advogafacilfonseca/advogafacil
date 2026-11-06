@@ -78,7 +78,7 @@ class Parcela(Base):
     __mapper_args__ = {"version_id_col": versao}
     __table_args__ = (
         UniqueConstraint("contrato_id", "numero", name="numero_unico_no_contrato"),
-        CheckConstraint("tipo IN ('entrada', 'parcela')", name="tipo_valido"),
+        CheckConstraint("tipo IN ('entrada', 'parcela', 'anterior')", name="tipo_valido"),
         CheckConstraint("situacao IN ('aberta', 'paga', 'cancelada', 'renegociada')", name="situacao_valida"),
         CheckConstraint("valor > 0 AND valor_baixado >= 0 AND valor_baixado <= valor", name="valores_validos"),
         Index("ix_parcelas_vencimento_abertas", "vencimento", postgresql_where=text("situacao = 'aberta'")),

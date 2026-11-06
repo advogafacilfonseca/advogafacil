@@ -13,6 +13,18 @@ from decimal import ROUND_DOWN, Decimal
 from pathlib import Path
 from typing import Any
 
+from advoga_shared.esquemas import (
+    CATEGORIAS_DESPESA,
+    FORMAS_PAGAMENTO,
+    NOMES_FORMAS_PAGAMENTO,
+    SITUACOES_CONTRATO,
+    SITUACOES_PARCELA,
+    Contrato,
+    Despesa,
+    Parcela,
+    nome_parcela,
+)
+from advoga_shared.permissoes import Permissao
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -40,21 +52,22 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from advoga_shared.esquemas import (
-    CATEGORIAS_DESPESA,
-    FORMAS_PAGAMENTO,
-    SITUACOES_CONTRATO,
-    SITUACOES_PARCELA,
-    Contrato,
-    Despesa,
-    Parcela,
-)
-from advoga_shared.permissoes import Permissao
-
 from ...api_client.cliente import ClienteAPI, ErroAPI
-from ..componentes.basicos import ajustar_altura, bloco_campo, campo, limpar_formulario, rotulo
+from ..componentes.basicos import (
+    ajustar_altura,
+    bloco_campo,
+    campo,
+    limpar_formulario,
+    rotulo,
+)
 from ..componentes.espera import cursor_espera
-from ..componentes.formatos import data_br, data_hora_br, dinheiro_br, ler_data_br, ler_dinheiro_br
+from ..componentes.formatos import (
+    data_br,
+    data_hora_br,
+    dinheiro_br,
+    ler_data_br,
+    ler_dinheiro_br,
+)
 from ..componentes.seletores import SeletorCliente
 from ..tema.tema import CORES
 
@@ -89,7 +102,7 @@ def situacao_parcela(p: Parcela) -> str:
 
 
 def rotulo_parcela(p: Parcela) -> str:
-    return "Entrada" if p.tipo == "entrada" else f"Parcela {p.numero}"
+    return nome_parcela(p.tipo, p.numero)
 
 
 def _tabela(colunas: list[str], esticar: int | None = None) -> QTableWidget:
@@ -229,6 +242,10 @@ class DialogoContrato(QDialog):
         self.inicio = campo("dd/mm/aaaa", maximo=10)
         self.inicio.setText(date.today().strftime("%d/%m/%Y"))
         self.total = campo("0,00", maximo=20)
+        self.ja_pago = campo("0,00", maximo=20)
+        self.ja_pago.setToolTip("Para clientes antigos: quanto o cliente já pagou antes de o contrato ser cadastrado "
+                                "no sistema. Entra como recebido e é descontado do valor a parcelar.")
+        self.data_ja_pago = campo("dd/mm/aaaa (padrão: início)", maximo=10)
         self.entrada = campo("0,00", maximo=20)
         self.venc_entrada = campo("dd/mm/aaaa (padrão: início)", maximo=10)
         self.qtd = campo("0", maximo=3)
@@ -246,12 +263,14 @@ class DialogoContrato(QDialog):
         g.addWidget(bloco_campo("Advogado responsável", self.responsavel), 1, 2)
         g.addWidget(bloco_campo("Início do atendimento *", self.inicio), 1, 3)
         g.addWidget(bloco_campo("Valor total do contrato *", self.total), 2, 0)
-        g.addWidget(bloco_campo("Valor da entrada", self.entrada), 2, 1)
-        g.addWidget(bloco_campo("Vencimento da entrada", self.venc_entrada), 2, 2)
-        g.addWidget(bloco_campo("Quantidade de parcelas", self.qtd), 3, 0)
-        g.addWidget(bloco_campo("Valor de cada parcela", self.valor_parcela), 3, 1)
-        g.addWidget(bloco_campo("Primeiro vencimento", self.primeiro), 3, 2)
-        g.addWidget(bloco_campo("Dia dos vencimentos seguintes", self.dia), 3, 3)
+        g.addWidget(bloco_campo("Valor já pago (antes do sistema)", self.ja_pago), 2, 1)
+        g.addWidget(bloco_campo("Data do valor já pago", self.data_ja_pago), 2, 2)
+        g.addWidget(bloco_campo("Valor da entrada", self.entrada), 3, 0)
+        g.addWidget(bloco_campo("Vencimento da entrada", self.venc_entrada), 3, 1)
+        g.addWidget(bloco_campo("Quantidade de parcelas", self.qtd), 4, 0)
+        g.addWidget(bloco_campo("Valor de cada parcela", self.valor_parcela), 4, 1)
+        g.addWidget(bloco_campo("Primeiro vencimento", self.primeiro), 4, 2)
+        g.addWidget(bloco_campo("Dia dos vencimentos seguintes", self.dia), 4, 3)
         lay.addLayout(g)
         lay.addWidget(self.personalizar)
         self.previa = QTableWidget(0, 3)
@@ -275,7 +294,7 @@ class DialogoContrato(QDialog):
         externo.addLayout(rodape)
         self.btn_salvar.clicked.connect(self.salvar)
         self.cliente.alterado.connect(lambda cid: _recarregar_processos(api, self.processo, cid))
-        for w in (self.total, self.entrada, self.qtd, self.valor_parcela, self.primeiro, self.dia):
+        for w in (self.total, self.ja_pago, self.entrada, self.qtd, self.valor_parcela, self.primeiro, self.dia):
             w.textChanged.connect(self.atualizar_previa)
         self.personalizar.toggled.connect(self._alternar_personalizacao)
         if cliente:
@@ -283,9 +302,14 @@ class DialogoContrato(QDialog):
             self.cliente.btn.setEnabled(False)
         self.resize(900, 780)
 
+    def _ja_pago(self) -> Decimal:
+        return ler_dinheiro_br(self.ja_pago.text()) or Decimal("0")
+
     def _numeros(self) -> tuple[Decimal, Decimal, int, Decimal | None, date | None, int | None]:
+        """Valores do formulário. A "entrada" devolvida já inclui o valor pago antes do sistema,
+        porque os dois são descontados do total antes de calcular as parcelas."""
         total = ler_dinheiro_br(self.total.text()) or Decimal("0")
-        entrada = ler_dinheiro_br(self.entrada.text()) or Decimal("0")
+        entrada = (ler_dinheiro_br(self.entrada.text()) or Decimal("0")) + self._ja_pago()
         qtd = int(self.qtd.text()) if self.qtd.text().strip().isdigit() else 0
         vp = ler_dinheiro_br(self.valor_parcela.text())
         primeiro = ler_data_br(self.primeiro.text())
@@ -324,7 +348,10 @@ class DialogoContrato(QDialog):
         except ValueError:
             self.resumo.setText("")
             return
-        texto = f"Entrada {dinheiro_br(entrada)} + parcelas {dinheiro_br(soma)} = {dinheiro_br(entrada + soma)}"
+        ja = self._ja_pago()
+        texto = f"Entrada {dinheiro_br(entrada - ja)} + parcelas {dinheiro_br(soma)} = {dinheiro_br(entrada + soma)}"
+        if ja:
+            texto = f"Já pago {dinheiro_br(ja)} + " + texto
         if total and entrada + soma != total:
             texto += f"  ·  diferença de {dinheiro_br(total - entrada - soma)} para o valor total"
         self.resumo.setText(texto)
@@ -357,12 +384,16 @@ class DialogoContrato(QDialog):
         dados: dict[str, Any] = {
             "cliente_id": self.cliente.cliente_id, "processo_id": self.processo.currentData(),
             "servico_contratado": self.servico.text().strip(), "advogado_responsavel_id": self.responsavel.currentData(),
-            "data_inicio": ini.isoformat(), "valor_total": str(total), "valor_entrada": str(entrada),
+            "data_inicio": ini.isoformat(), "valor_total": str(total),
+            "valor_entrada": str(entrada - self._ja_pago()), "valor_ja_pago": str(self._ja_pago()),
             "observacoes": self.obs.toPlainText().strip() or None,
         }
         ve = ler_data_br(self.venc_entrada.text())
         if ve:
             dados["vencimento_entrada"] = ve.isoformat()
+        dj = ler_data_br(self.data_ja_pago.text())
+        if dj and self._ja_pago() > 0:
+            dados["data_valor_ja_pago"] = dj.isoformat()
         if self.personalizar.isChecked():
             dados["parcelas_personalizadas"] = [{"valor": str(v), "vencimento": d.isoformat()}
                                                 for v, d in self._parcelas_da_tabela()]
@@ -747,7 +778,7 @@ class FichaContrato(QDialog):
         self.pagamentos, _ = self.api.listar_pagamentos(contrato_id=self.contrato_id)
         _preencher(self.tabela_receb, [[data_br(pg.data_recebimento), "Entrada" if pg.parcela_numero == 0 else
                                         f"Parcela {pg.parcela_numero}", dinheiro_br(pg.valor),
-                                        FORMAS_PAGAMENTO.get(pg.forma_pagamento, pg.forma_pagamento),
+                                        NOMES_FORMAS_PAGAMENTO.get(pg.forma_pagamento, pg.forma_pagamento),
                                         pg.registrado_por_nome or "—", pg.comprovante_nome or "",
                                         (f"ESTORNADO: {pg.motivo_estorno}" if pg.estornado_em else (pg.observacoes or ""))]
                                        for pg in self.pagamentos],
@@ -766,7 +797,7 @@ class FichaContrato(QDialog):
             extra = ""
             if a.acao == "financeiro.recebimento":
                 extra = f"{'Entrada' if d.get('parcela') == 0 else 'Parcela ' + str(d.get('parcela'))}: " \
-                        f"{dinheiro_br(d.get('valor', 0))} ({FORMAS_PAGAMENTO.get(d.get('forma'), '')})"
+                        f"{dinheiro_br(d.get('valor', 0))} ({NOMES_FORMAS_PAGAMENTO.get(d.get('forma'), '')})"
             elif a.acao in ("financeiro.estorno", "financeiro.parcela_cancelada", "contrato.cancelado",
                             "contrato.renegociado"):
                 extra = d.get("motivo", "")
@@ -1310,7 +1341,7 @@ class TelaFinanceiro(QWidget):
             return
         _preencher(self.tabela_receb, [[data_br(x.data_recebimento), x.cliente_nome or "",
                                         "Entrada" if x.parcela_numero == 0 else f"Parcela {x.parcela_numero}",
-                                        dinheiro_br(x.valor), FORMAS_PAGAMENTO.get(x.forma_pagamento, ""),
+                                        dinheiro_br(x.valor), NOMES_FORMAS_PAGAMENTO.get(x.forma_pagamento, ""),
                                         x.registrado_por_nome or "",
                                         f"ESTORNADO: {x.motivo_estorno}" if x.estornado_em else (x.observacoes or "")]
                                        for x in pgs], [CORES["texto_suave"] if x.estornado_em else None for x in pgs],
