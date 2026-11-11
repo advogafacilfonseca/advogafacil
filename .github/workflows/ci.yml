@@ -138,7 +138,12 @@ jobs:
           for ($i = 0; $i -lt 10 -and (Get-NetFirewallRule -DisplayName "Advoga Fácil Servidor*" -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 3 }
           if (Get-NetFirewallRule -DisplayName "Advoga Fácil Servidor*" -ErrorAction SilentlyContinue) { Diagnostico; throw "Regra de firewall não removida" }
           if (-not (Test-Path "$env:ProgramData\AdvogaFacil\postgres\data\PG_VERSION")) { throw "Os dados foram apagados" }
-          Write-Host "Instalador do servidor: instalação, atualização e desinstalação conferidas."
+          # 4) Reinstalação depois de desinstalar: reaproveita o banco existente (mesma identidade)
+          Start-Process $inst.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=inst3.log" -Wait
+          $s = Esperar-Servidor
+          if ($s.servidor_id -ne $id1) { throw "A reinstalação trocou a identidade do servidor" }
+          if (-not (Get-NetFirewallRule -DisplayName "Advoga Fácil Servidor*" -ErrorAction SilentlyContinue)) { throw "Reinstalação sem regras de firewall" }
+          Write-Host "Instalador do servidor: instalação, atualização, desinstalação e reinstalação conferidas."
       - name: Teste real do instalador do aplicativo
         shell: pwsh
         run: |
