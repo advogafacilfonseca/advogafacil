@@ -34,10 +34,12 @@ Source: "..\..\dist\winsw\WinSW-x64.exe"; DestDir: "{app}\servico"; DestName: "A
 Source: "..\servidor\AdvogaFacilServico.xml"; DestDir: "{app}\servico"; Flags: ignoreversion
 Source: "..\servidor\configurar_servidor.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "..\servidor\remover_servicos.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "..\servidor\recuperar_senha_master.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Código de instalação (conta Master)"; Filename: "{commonappdata}\AdvogaFacil\config\CODIGO_DE_INSTALACAO.txt"
 Name: "{group}\Como conectar os computadores"; Filename: "{commonappdata}\AdvogaFacil\config\COMO_CONECTAR.txt"
+Name: "{group}\Recuperar a senha da Master"; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\recuperar_senha_master.ps1"""
 Name: "{group}\Pasta de dados do servidor"; Filename: "{commonappdata}\AdvogaFacil"
 Name: "{group}\Desinstalar Advoga Fácil Servidor"; Filename: "{uninstallexe}"
 

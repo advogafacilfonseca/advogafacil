@@ -115,6 +115,10 @@ jobs:
           }
           $sidsCfg = (Get-Acl "$env:ProgramData\AdvogaFacil\config\servidor.json").Access | ForEach-Object { $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value }
           if ($sidsCfg -contains $eu) { throw "servidor.json ficou acessível fora dos Administradores" }
+          # Recuperação da senha da Master: atalho instalado; sem Master ainda, o comando recusa sem alterar nada
+          if (-not (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Advoga Fácil Servidor\Recuperar a senha da Master.lnk")) { throw "Sem atalho de recuperação da senha da Master" }
+          & "${env:ProgramFiles}\AdvogaFacilServidor\servidor\AdvogaFacilServidor.exe" recuperar-senha-master | Out-Host
+          if ($LASTEXITCODE -ne 1) { throw "recuperar-senha-master deveria recusar quando ainda não há Master (código $LASTEXITCODE)" }
           # O PostgreSQL só escuta no próprio computador
           $pg = Get-NetTCPConnection -LocalPort 5433 -State Listen
           if ($pg | Where-Object { $_.LocalAddress -ne "127.0.0.1" }) { throw "PostgreSQL exposto fora de 127.0.0.1" }

@@ -105,6 +105,34 @@ def _backup_agora(args) -> int:
         db.close()
 
 
+def _recuperar_senha_master() -> int:
+    from .core.db import configurar_banco, obter_sessao
+    from .services.recuperacao_master import recuperar_senha_master
+
+    if sys.platform == "win32":
+        import ctypes
+
+        if not ctypes.windll.shell32.IsUserAnAdmin():
+            print("Este comando precisa ser executado como administrador do Windows.")
+            return 2
+    cfg = obter_configuracoes()
+    configurar_banco(cfg.url_banco())
+    db = next(obter_sessao())
+    try:
+        try:
+            master, senha = recuperar_senha_master(db)
+        except LookupError as exc:
+            print(str(exc))
+            return 1
+        db.commit()
+    finally:
+        db.close()
+    print(f"Usuário da Master: {master.nome_usuario}")
+    print(f"Senha provisória:  {senha}")
+    print("No próximo acesso, o sistema pede para criar uma senha nova.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="advoga-servidor", description="Servidor do Advoga Fácil")
     sub = parser.add_subparsers(dest="comando", required=True)
@@ -118,6 +146,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--origem", required=True, help="Pasta do backup, pasta de uma versão ou arquivo .afbk")
     r.add_argument("--banco", help="URL do banco de destino (padrão: o banco deste servidor)")
     sub.add_parser("informacoes", help="Mostra e grava em COMO_CONECTAR.txt como conectar os computadores")
+    sub.add_parser("recuperar-senha-master",
+                   help="Gera uma senha provisória para a conta Master (somente no servidor, como administrador)")
     im = sub.add_parser("importar-migracao",
                         help="Importa o pacote de migração (.afmig) num servidor recém-instalado")
     im.add_argument("--pacote", required=True, help="Caminho do arquivo .afmig")
@@ -135,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.comando == "importar-migracao":
         return _importar_migracao(args)
+    if args.comando == "recuperar-senha-master":
+        return _recuperar_senha_master()
     if args.comando == "restaurar":
         return _restaurar(args)
     if args.comando in ("backup", "testar-restauracao"):

@@ -37,6 +37,7 @@ Os instaladores são gerados automaticamente no GitHub do projeto a cada atualiz
 3. No menu Iniciar, na pasta **Advoga Fácil Servidor**, estão os atalhos:
    - **Código de instalação (conta Master)**, usado uma única vez;
    - **Como conectar os computadores**: endereços do servidor e a impressão digital do certificado;
+   - **Recuperar a senha da Master**, se a senha da conta Master for esquecida;
    - **Pasta de dados do servidor**.
 
 **Rede do escritório como "Particular":** em *Configurações > Rede e Internet > Wi-Fi (ou Ethernet) > propriedades da rede*, marque **Rede particular**. Em redes públicas (café, aeroporto), os computadores só alcançam o servidor pela Tailscale.
@@ -106,4 +107,5 @@ Pelo *Painel de Controle > Programas*. A desinstalação do servidor remove os s
 | Aviso de certificado diferente | Não continue. Só é normal depois de reinstalar ou migrar o servidor. Nesse caso, confira a impressão digital nova no arquivo **Como conectar os computadores** e clique em **Alterar servidor**. |
 | "Este servidor foi substituído por um servidor novo" | O escritório migrou de servidor. Informe o endereço do servidor novo. |
 | O atalho **Código de instalação** diz que o acesso foi negado | Abra o **Bloco de Notas** com *Executar como administrador*, vá em **Arquivo > Abrir** e abra `C:\ProgramData\AdvogaFacil\config\CODIGO_DE_INSTALACAO.txt`. Os atalhos abrem sem isso quando o servidor é instalado com a versão corrigida. |
+| Esqueci a senha da Master | No servidor: menu Iniciar > **Advoga Fácil Servidor > Recuperar a senha da Master** (manual de administração, seção 2). |
 | Serviço parado | No servidor, abra *Serviços* do Windows e inicie **Advoga Fácil Servidor**. Os registros ficam em `C:\ProgramData\AdvogaFacil\logs`. |

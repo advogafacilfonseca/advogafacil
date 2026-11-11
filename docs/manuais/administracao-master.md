@@ -41,6 +41,8 @@ Menu **Usuários e Permissões**.
 
 **Saída de um funcionário:** desative o usuário no mesmo dia, retire o computador dele da Tailscale (painel `login.tailscale.com`) e confira na **Auditoria** as últimas atividades.
 
+**Esqueceu a senha da Master?** No próprio notebook servidor, abra o menu Iniciar > **Advoga Fácil Servidor > Recuperar a senha da Master**, aceite o pedido de administrador do Windows e digite **SIM**. A tela mostra uma **senha provisória**: entre com ela no Advoga Fácil e crie uma senha nova. A senha antiga deixa de funcionar, as sessões abertas da Master são encerradas e a recuperação fica registrada na Auditoria e nos avisos. Só funciona no computador servidor, por quem é administrador do Windows; não existe recuperação pela internet nem por e-mail.
+
 ## 3. Notificações
 
 Menu **Notificações** (só a Master).
