@@ -8,7 +8,7 @@ on:
 
 jobs:
   testes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # fixo: o PostgreSQL 16 (pg_dump/pg_restore dos backups) vem do repositório desta versão
     services:
       postgres:
         image: postgres:16
